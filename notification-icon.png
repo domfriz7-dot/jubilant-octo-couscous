@@ -1,0 +1,177 @@
+/**
+ * CalendarService & TasksService tests
+ *
+ * Tests the core data layer: add/update/delete, subscriptions,
+ * and date filtering. These catch:
+ *   - addEvent not persisting (event vanishes on reload)
+ *   - getEventsForDate returning wrong day's events
+ *   - toggleTask not flipping completed flag
+ *   - clearCompleted leaving stale data
+ *   - Subscriptions not firing (UI doesn't update)
+ */
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+let CalendarService, TasksService;
+
+beforeEach(() => {
+  AsyncStorage.__resetStore();
+  jest.resetModules();
+  CalendarService = require('../src/services/CalendarService').default;
+  TasksService = require('../src/services/TasksService').default;
+});
+
+describe('CalendarService', () => {
+  describe('addEvent', () => {
+    it('creates an event with generated id and createdBy', async () => {
+      const event = await CalendarService.addEvent({
+        title: 'Dinner', date: '2025-06-15', time: '19:00',
+      });
+      expect(event.id).toBeDefined();
+      expect(event.title).toBe('Dinner');
+      expect(event.createdBy).toBe('1'); // default current user
+      expect(event.sharedWith).toEqual([]);
+    });
+
+    it('persists — getEvents returns it', async () => {
+      await CalendarService.addEvent({ title: 'Persist test', date: '2025-06-15', time: '10:00' });
+      const events = await CalendarService.getEvents();
+      expect(events.some(e => e.title === 'Persist test')).toBe(true);
+    });
+
+    it('preserves sharedWith', async () => {
+      const event = await CalendarService.addEvent({
+        title: 'Shared event', date: '2025-06-15', time: '10:00', sharedWith: ['2', '3'],
+      });
+      expect(event.sharedWith).toEqual(['2', '3']);
+    });
+  });
+
+  describe('getEventsForDate', () => {
+    it('filters events to the selected date only', async () => {
+      await CalendarService.addEvent({ title: 'Today', date: '2025-06-15', time: '09:00' });
+      await CalendarService.addEvent({ title: 'Tomorrow', date: '2025-06-16', time: '09:00' });
+
+      const todayEvents = await CalendarService.getEventsForDate('2025-06-15');
+      expect(todayEvents.length).toBe(1);
+      expect(todayEvents[0].title).toBe('Today');
+    });
+
+    it('returns empty array for date with no events', async () => {
+      await CalendarService.addEvent({ title: 'Not this day', date: '2025-06-15', time: '09:00' });
+      const events = await CalendarService.getEventsForDate('2025-12-25');
+      expect(events).toEqual([]);
+    });
+  });
+
+  describe('updateEvent', () => {
+    it('updates the specified fields', async () => {
+      const event = await CalendarService.addEvent({ title: 'Original', date: '2025-06-15', time: '09:00' });
+      const updated = await CalendarService.updateEvent(event.id, { title: 'Renamed', time: '10:00' });
+      expect(updated.title).toBe('Renamed');
+      expect(updated.time).toBe('10:00');
+      expect(updated.date).toBe('2025-06-15'); // unchanged
+    });
+
+    it('returns null for nonexistent id', async () => {
+      const result = await CalendarService.updateEvent('nonexistent', { title: 'X' });
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('deleteEvent', () => {
+    it('removes the event', async () => {
+      const event = await CalendarService.addEvent({ title: 'Delete me', date: '2025-06-15', time: '09:00' });
+      await CalendarService.deleteEvent(event.id);
+      const events = await CalendarService.getEvents();
+      expect(events.find(e => e.id === event.id)).toBeUndefined();
+    });
+  });
+
+  describe('subscribe', () => {
+    it('fires listener on addEvent', async () => {
+      const spy = jest.fn();
+      CalendarService.subscribe(spy);
+      await CalendarService.addEvent({ title: 'Sub test', date: '2025-06-15', time: '09:00' });
+      expect(spy).toHaveBeenCalled();
+    });
+
+    it('unsubscribe stops notifications', async () => {
+      const spy = jest.fn();
+      const unsub = CalendarService.subscribe(spy);
+      unsub();
+      spy.mockClear();
+      await CalendarService.addEvent({ title: 'No notify', date: '2025-06-15', time: '09:00' });
+      expect(spy).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('TasksService', () => {
+  describe('addTask', () => {
+    it('creates a task with defaults', async () => {
+      const task = await TasksService.addTask({ text: 'Buy milk', dueDate: '2025-06-15' });
+      expect(task.id).toBeDefined();
+      expect(task.text).toBe('Buy milk');
+      expect(task.assignedTo).toBe('local-user');
+      expect(task.sharedWith).toEqual([]);
+    });
+
+    it('persists — getTasks returns it', async () => {
+      await TasksService.addTask({ text: 'Persist task', dueDate: '2025-06-15' });
+      const tasks = await TasksService.getTasks();
+      expect(tasks.some(t => t.text === 'Persist task')).toBe(true);
+    });
+  });
+
+  describe('toggleTask', () => {
+    it('flips completed from false to true', async () => {
+      const task = await TasksService.addTask({ text: 'Toggle me', completed: false });
+      const toggled = await TasksService.toggleTask(task.id);
+      expect(toggled.completed).toBe(true);
+      expect(toggled.completedAt).toBeDefined();
+    });
+
+    it('flips completed from true back to false', async () => {
+      const task = await TasksService.addTask({ text: 'Toggle back', completed: false });
+      await TasksService.toggleTask(task.id);
+      const toggled = await TasksService.toggleTask(task.id);
+      expect(toggled.completed).toBe(false);
+      expect(toggled.completedAt).toBeNull();
+    });
+
+    it('returns null for nonexistent task', async () => {
+      const result = await TasksService.toggleTask('ghost');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('clearCompleted', () => {
+    it('removes only completed tasks', async () => {
+      await TasksService.addTask({ text: 'Done', completed: true });
+      await TasksService.addTask({ text: 'Not done', completed: false });
+      await TasksService.clearCompleted();
+      const tasks = await TasksService.getTasks();
+      expect(tasks.every(t => !t.completed)).toBe(true);
+      expect(tasks.some(t => t.text === 'Not done')).toBe(true);
+    });
+  });
+
+  describe('removeTask', () => {
+    it('removes the specific task', async () => {
+      const task = await TasksService.addTask({ text: 'Remove me' });
+      await TasksService.removeTask(task.id);
+      const tasks = await TasksService.getTasks();
+      expect(tasks.find(t => t.id === task.id)).toBeUndefined();
+    });
+  });
+
+  describe('subscribe', () => {
+    it('fires on addTask', async () => {
+      const spy = jest.fn();
+      TasksService.subscribe(spy);
+      await TasksService.addTask({ text: 'Sub test' });
+      expect(spy).toHaveBeenCalled();
+    });
+  });
+});

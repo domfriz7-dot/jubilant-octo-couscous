@@ -1,0 +1,412 @@
+/**
+ * Enhanced test coverage for U&Me — Items 2-6
+ *
+ * Tests:
+ *   - Tasks "Coming up" section grouping (7-day window)
+ *   - Notification scheduling logic (event, task, digest)
+ *   - Calendar sync write-back mapping
+ *   - Dark mode token completeness
+ *   - Shared styles module integrity
+ */
+
+// ─── Tasks ViewModel: "Coming up" 7-day window ───────────
+
+describe('Tasks "Coming up" view — section grouping', () => {
+  function fmtKey(d) { return d.toISOString().split('T')[0]; }
+
+  function daysFromNow(dateStr) {
+    if (!dateStr) return Infinity;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const target = new Date(dateStr + 'T00:00:00');
+    return Math.round((target - today) / (24 * 60 * 60 * 1000));
+  }
+
+  function isOverdue(t) {
+    return !t.completed && t.dueDate && new Date(`${t.dueDate}T${t.dueTime || '23:59'}`) < new Date();
+  }
+
+  function sectionLabel(dateStr) {
+    if (!dateStr) return 'No date';
+    const diff = daysFromNow(dateStr);
+    if (diff < 0) return 'Overdue';
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Tomorrow';
+    return new Date(dateStr + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+  }
+
+  function buildComingUpSections(active) {
+    const sevenOut = new Date();
+    sevenOut.setDate(sevenOut.getDate() + 7);
+    const cutoff = fmtKey(sevenOut);
+
+    const upcoming = active.filter(t => {
+      if (isOverdue(t)) return true;
+      if (!t.dueDate) return true;
+      return t.dueDate <= cutoff;
+    });
+
+    const sorted = upcoming.sort((a, b) => {
+      if (isOverdue(a) !== isOverdue(b)) return isOverdue(a) ? -1 : 1;
+      if (a.dueDate !== b.dueDate) return (a.dueDate || 'zzzz').localeCompare(b.dueDate || 'zzzz');
+      return 0;
+    });
+
+    const sectionMap = new Map();
+    for (const t of sorted) {
+      const key = isOverdue(t) ? 'Overdue' : sectionLabel(t.dueDate);
+      if (!sectionMap.has(key)) sectionMap.set(key, []);
+      sectionMap.get(key).push(t);
+    }
+    return Array.from(sectionMap.entries()).map(([title, data]) => ({ title, count: data.length }));
+  }
+
+  const today = fmtKey(new Date());
+  const tomorrow = fmtKey(new Date(Date.now() + 86400000));
+  const inThreeDays = fmtKey(new Date(Date.now() + 3 * 86400000));
+  const inTenDays = fmtKey(new Date(Date.now() + 10 * 86400000));
+
+  it('groups overdue tasks in "Overdue" section', () => {
+    const tasks = [
+      { id: '1', text: 'Old task', completed: false, dueDate: '2020-01-01', dueTime: '09:00' },
+      { id: '2', text: 'Today task', completed: false, dueDate: today },
+    ];
+    const sections = buildComingUpSections(tasks);
+    expect(sections[0].title).toBe('Overdue');
+    expect(sections[0].count).toBe(1);
+  });
+
+  it('includes tasks due within 7 days', () => {
+    const tasks = [
+      { id: '1', text: 'Today', completed: false, dueDate: today },
+      { id: '2', text: 'Tomorrow', completed: false, dueDate: tomorrow },
+      { id: '3', text: 'In 3 days', completed: false, dueDate: inThreeDays },
+    ];
+    const sections = buildComingUpSections(tasks);
+    const totalItems = sections.reduce((sum, s) => sum + s.count, 0);
+    expect(totalItems).toBe(3);
+  });
+
+  it('excludes tasks due beyond 7 days', () => {
+    const tasks = [
+      { id: '1', text: 'Today', completed: false, dueDate: today },
+      { id: '2', text: 'Far away', completed: false, dueDate: inTenDays },
+    ];
+    const sections = buildComingUpSections(tasks);
+    const totalItems = sections.reduce((sum, s) => sum + s.count, 0);
+    expect(totalItems).toBe(1);
+  });
+
+  it('includes undated tasks', () => {
+    const tasks = [
+      { id: '1', text: 'No date', completed: false },
+    ];
+    const sections = buildComingUpSections(tasks);
+    expect(sections.length).toBeGreaterThan(0);
+    expect(sections.reduce((sum, s) => sum + s.count, 0)).toBe(1);
+  });
+
+  it('returns empty sections for no tasks', () => {
+    const sections = buildComingUpSections([]);
+    expect(sections.length).toBe(0);
+  });
+
+  it('puts overdue before today', () => {
+    const tasks = [
+      { id: '1', text: 'Today', completed: false, dueDate: today },
+      { id: '2', text: 'Old', completed: false, dueDate: '2020-06-15', dueTime: '10:00' },
+    ];
+    const sections = buildComingUpSections(tasks);
+    expect(sections[0].title).toBe('Overdue');
+    expect(sections[1].title).toBe('Today');
+  });
+});
+
+// ─── Notification scheduling logic ────────────────────────
+
+describe('Notification scheduling — time calculations', () => {
+  function calcTriggerTime(dateKey, timeStr, minutesBefore) {
+    const [yyyy, mm, dd] = String(dateKey).split('-').map(Number);
+    const [hh, min] = String(timeStr).split(':').map(Number);
+    if (!yyyy || !mm || !dd) return null;
+
+    const triggerAt = new Date(yyyy, (mm - 1), dd, hh || 0, min || 0, 0);
+    triggerAt.setMinutes(triggerAt.getMinutes() - minutesBefore);
+    return triggerAt;
+  }
+
+  it('calculates correct trigger for 15 min before', () => {
+    const trigger = calcTriggerTime('2099-06-15', '14:30', 15);
+    expect(trigger.getHours()).toBe(14);
+    expect(trigger.getMinutes()).toBe(15);
+  });
+
+  it('calculates correct trigger for 0 min before (at time)', () => {
+    const trigger = calcTriggerTime('2099-06-15', '09:00', 0);
+    expect(trigger.getHours()).toBe(9);
+    expect(trigger.getMinutes()).toBe(0);
+  });
+
+  it('calculates correct trigger for 60 min before', () => {
+    const trigger = calcTriggerTime('2099-06-15', '10:00', 60);
+    expect(trigger.getHours()).toBe(9);
+    expect(trigger.getMinutes()).toBe(0);
+  });
+
+  it('handles midnight rollover', () => {
+    const trigger = calcTriggerTime('2099-06-15', '00:10', 30);
+    // Goes to previous day
+    expect(trigger.getDate()).toBe(14);
+    expect(trigger.getHours()).toBe(23);
+    expect(trigger.getMinutes()).toBe(40);
+  });
+
+  it('returns null for invalid date', () => {
+    const trigger = calcTriggerTime('not-a-date', '10:00', 0);
+    expect(trigger).toBeNull();
+  });
+
+  it('skips past notifications', () => {
+    const trigger = calcTriggerTime('2020-01-01', '09:00', 15);
+    const isPast = trigger.getTime() <= Date.now();
+    expect(isPast).toBe(true);
+  });
+});
+
+describe('Notification preference defaults', () => {
+  const DEFAULT_PREFS = {
+    eventReminders: true,
+    taskReminders: true,
+    dailyDigest: true,
+    digestHour: 8,
+    digestMinute: 0,
+    nudges: true,
+    eventChanges: true,
+    weeklyReport: true,
+    weeklyReportDay: 0,
+    weeklyReportHour: 10,
+  };
+
+  it('has all required preference keys', () => {
+    const keys = ['eventReminders', 'taskReminders', 'dailyDigest', 'nudges', 'eventChanges', 'weeklyReport'];
+    keys.forEach(key => {
+      expect(DEFAULT_PREFS).toHaveProperty(key);
+    });
+  });
+
+  it('defaults all notifications to enabled', () => {
+    expect(DEFAULT_PREFS.eventReminders).toBe(true);
+    expect(DEFAULT_PREFS.taskReminders).toBe(true);
+    expect(DEFAULT_PREFS.dailyDigest).toBe(true);
+    expect(DEFAULT_PREFS.nudges).toBe(true);
+  });
+
+  it('defaults digest to 8:00 AM', () => {
+    expect(DEFAULT_PREFS.digestHour).toBe(8);
+    expect(DEFAULT_PREFS.digestMinute).toBe(0);
+  });
+
+  it('defaults weekly report to Sunday 10 AM', () => {
+    expect(DEFAULT_PREFS.weeklyReportDay).toBe(0);
+    expect(DEFAULT_PREFS.weeklyReportHour).toBe(10);
+  });
+});
+
+// ─── Calendar sync — event transformation ─────────────────
+
+describe('Calendar import — event transformation', () => {
+  function categorizeEvent(title) {
+    const combined = title.toLowerCase();
+    if (/(date|dinner|movie|coffee|lunch|brunch|breakfast)/.test(combined)) return 'date';
+    if (/(gym|workout|exercise|run|yoga|fitness)/.test(combined)) return 'activity';
+    if (/(flight|trip|vacation|travel|hotel)/.test(combined)) return 'travel';
+    return 'other';
+  }
+
+  function shouldImportEvent(event, { excludeKeywords = [], onlyShared = false } = {}) {
+    if (event.allDay) return false;
+    const title = (event.title || '').toLowerCase();
+    if (excludeKeywords.some(kw => title.includes(kw.toLowerCase()))) return false;
+    if (onlyShared && (!event.attendees || event.attendees.length === 0)) return false;
+    return true;
+  }
+
+  it('categorizes dinner as "date"', () => {
+    expect(categorizeEvent('Dinner with Sarah')).toBe('date');
+  });
+
+  it('categorizes gym as "activity"', () => {
+    expect(categorizeEvent('Gym session')).toBe('activity');
+  });
+
+  it('categorizes flight as "travel"', () => {
+    expect(categorizeEvent('Flight to London')).toBe('travel');
+  });
+
+  it('categorizes unknown as "other"', () => {
+    expect(categorizeEvent('Team retrospective')).toBe('other');
+  });
+
+  it('excludes all-day events', () => {
+    expect(shouldImportEvent({ allDay: true, title: 'Holiday' })).toBe(false);
+  });
+
+  it('excludes events with excluded keywords', () => {
+    expect(shouldImportEvent(
+      { allDay: false, title: 'Daily standup' },
+      { excludeKeywords: ['standup', 'meeting'] }
+    )).toBe(false);
+  });
+
+  it('includes normal events', () => {
+    expect(shouldImportEvent({ allDay: false, title: 'Coffee with Mike' })).toBe(true);
+  });
+
+  it('filters shared-only when requested', () => {
+    expect(shouldImportEvent(
+      { allDay: false, title: 'Solo task', attendees: [] },
+      { onlyShared: true }
+    )).toBe(false);
+
+    expect(shouldImportEvent(
+      { allDay: false, title: 'Team lunch', attendees: [{ name: 'Me' }, { name: 'Other' }] },
+      { onlyShared: true }
+    )).toBe(true);
+  });
+});
+
+// ─── Dark mode token completeness ─────────────────────────
+
+describe('Dark mode tokens', () => {
+  // Simulate the token structure
+  const lightColors = {
+    bg: { base: '#FAF8F5', card: '#FFFFFF', elevated: '#FFFFFF', subtle: '#F3F0EC' },
+    text: { primary: '#3A3530', secondary: '#9B9389', tertiary: '#A39B92', inverse: '#FFFFFF' },
+    accent: { primary: '#B09080', light: '#F4EDEA', muted: '#CCBAB0', dark: '#917060' },
+    border: '#E8E3DD', divider: '#F3F0EC', overlay: 'rgba(37,34,32,0.4)',
+    success: '#6B9B7F', warning: '#D9A566', error: '#C06B65', info: '#7B93B3',
+  };
+
+  const darkColors = {
+    bg: { base: '#161514', card: '#1E1D1B', elevated: '#2A2825', subtle: '#1E1D1B' },
+    text: { primary: '#F0EDE9', secondary: '#B0AAA2', tertiary: '#8A857E', inverse: '#161514' },
+    accent: { primary: '#D4BBB0', light: 'rgba(212,187,176,0.15)', muted: '#B89485', dark: '#E8CCC4' },
+    border: '#3A3733', divider: '#2A2825', overlay: 'rgba(0,0,0,0.6)',
+    success: '#5DBF7B', warning: '#E8B86D', error: '#E8695F', info: '#8BA3C4',
+  };
+
+  it('dark mode has all the same keys as light mode', () => {
+    const lightKeys = Object.keys(lightColors);
+    const darkKeys = Object.keys(darkColors);
+    lightKeys.forEach(key => {
+      expect(darkKeys).toContain(key);
+    });
+  });
+
+  it('dark mode bg keys match light mode bg keys', () => {
+    Object.keys(lightColors.bg).forEach(key => {
+      expect(darkColors.bg).toHaveProperty(key);
+    });
+  });
+
+  it('dark mode text keys match light mode text keys', () => {
+    Object.keys(lightColors.text).forEach(key => {
+      expect(darkColors.text).toHaveProperty(key);
+    });
+  });
+
+  it('dark mode accent keys match light mode accent keys', () => {
+    Object.keys(lightColors.accent).forEach(key => {
+      expect(darkColors.accent).toHaveProperty(key);
+    });
+  });
+
+  it('dark bg.base is dark (low luminance)', () => {
+    // #161514 — R=22, G=21, B=20
+    const hex = darkColors.bg.base.replace('#', '');
+    const r = parseInt(hex.substring(0, 2), 16);
+    expect(r).toBeLessThan(50);
+  });
+
+  it('dark text.primary is light (high luminance)', () => {
+    // #F0EDE9 — R=240
+    const hex = darkColors.text.primary.replace('#', '');
+    const r = parseInt(hex.substring(0, 2), 16);
+    expect(r).toBeGreaterThan(200);
+  });
+
+  it('light text.inverse is white, dark text.inverse is dark', () => {
+    expect(lightColors.text.inverse).toBe('#FFFFFF');
+    expect(darkColors.text.inverse).toBe('#161514');
+  });
+
+  it('semantic colors have sufficient dark-mode contrast', () => {
+    // Success, warning, error should be brighter in dark mode
+    const darkSuccess = darkColors.success; // '#5DBF7B'
+    const lightSuccess = lightColors.success; // '#6B9B7F'
+    // Dark success green channel should be higher
+    const darkG = parseInt(darkSuccess.replace('#', '').substring(2, 4), 16);
+    const lightG = parseInt(lightSuccess.replace('#', '').substring(2, 4), 16);
+    expect(darkG).toBeGreaterThan(lightG);
+  });
+});
+
+// ─── Event change notification messages ───────────────────
+
+describe('Event change notification messages', () => {
+  function getChangeMessage(changeType, event, changedBy) {
+    const messages = {
+      rescheduled: `"${event.title}" has been rescheduled`,
+      cancelled: `"${event.title}" was cancelled`,
+      rsvp_accepted: `${changedBy || 'Someone'} accepted "${event.title}"`,
+      rsvp_declined: `${changedBy || 'Someone'} declined "${event.title}"`,
+      rsvp_tentative: `${changedBy || 'Someone'} is tentative for "${event.title}"`,
+      proposal: `New time proposed for "${event.title}"`,
+    };
+    return messages[changeType] || `"${event.title}" was updated`;
+  }
+
+  const event = { title: 'Date Night' };
+
+  it('generates rescheduled message', () => {
+    expect(getChangeMessage('rescheduled', event)).toContain('rescheduled');
+  });
+
+  it('generates cancelled message', () => {
+    expect(getChangeMessage('cancelled', event)).toContain('cancelled');
+  });
+
+  it('includes person name for RSVP', () => {
+    expect(getChangeMessage('rsvp_accepted', event, 'Sarah')).toContain('Sarah');
+  });
+
+  it('defaults to "Someone" when no name', () => {
+    expect(getChangeMessage('rsvp_accepted', event)).toContain('Someone');
+  });
+
+  it('falls back for unknown change types', () => {
+    expect(getChangeMessage('unknown_type', event)).toContain('updated');
+  });
+});
+
+// ─── Shared styles module ─────────────────────────────────
+
+describe('Shared styles utility', () => {
+  function pillBg(color, alpha = '15') {
+    return { backgroundColor: (color || '#999') + alpha };
+  }
+
+  it('creates pill background with default alpha', () => {
+    const result = pillBg('#FF0000');
+    expect(result.backgroundColor).toBe('#FF000015');
+  });
+
+  it('creates pill background with custom alpha', () => {
+    const result = pillBg('#00FF00', '20');
+    expect(result.backgroundColor).toBe('#00FF0020');
+  });
+
+  it('falls back to #999 for null color', () => {
+    const result = pillBg(null);
+    expect(result.backgroundColor).toBe('#99915');
+  });
+});

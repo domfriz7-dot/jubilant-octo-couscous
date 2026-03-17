@@ -1,0 +1,229 @@
+/**
+ * Insight engine tests
+ *
+ * These lock down the emotional copy layer — the actual value
+ * the app provides beyond raw scheduling. If these regress,
+ * the app silently drops from "relationship tool" to "calendar."
+ *
+ * Tests verify:
+ *   - Insights return strings (not undefined/null) for important situations
+ *   - Insights return null for "nothing worth saying" situations
+ *   - Copy doesn't accidentally become condescending or generic
+ *   - Person's name is used correctly in personalized messages
+ */
+
+import {
+  weekTogether,
+  sharedHistory,
+  taskDone,
+  allClear,
+  overdueReframe,
+  streakInsight,
+  streakBroken,
+  balanceInsight,
+  eventSharing,
+  eventCreated,
+  eventRescheduled,
+  eventDeleted,
+  bondNarrative,
+  xpEarned,
+  levelUp,
+  emptyConnection,
+  emptyDay,
+  noTasks,
+} from '../src/insights';
+
+describe('weekTogether', () => {
+  it('returns null for 0 events', () => {
+    expect(weekTogether(0, 'Sarah')).toBeNull();
+  });
+
+  it('returns string with name for 1+ events', () => {
+    const result = weekTogether(1, 'Sarah');
+    expect(typeof result).toBe('string');
+    expect(result).toContain('Sarah');
+  });
+
+  it('escalates tone with more events', () => {
+    const one = weekTogether(1, 'Mike');
+    const three = weekTogether(3, 'Mike');
+    const five = weekTogether(5, 'Mike');
+    expect(one.length).toBeLessThan(three.length + 20); // roughly more detail
+    expect(five).toContain('Mike');
+  });
+});
+
+describe('sharedHistory', () => {
+  it('handles zero with forward-looking message', () => {
+    const result = sharedHistory(0, 'Emma');
+    expect(result).toContain('Emma');
+    expect(result).toContain('starts');
+  });
+
+  it('acknowledges first moment', () => {
+    expect(sharedHistory(1, 'Sarah')).toContain('first');
+  });
+
+  it('escalates at 15+ moments', () => {
+    const result = sharedHistory(20, 'Mike');
+    expect(result).toContain('20');
+    expect(result).toContain('Mike');
+  });
+});
+
+describe('taskDone', () => {
+  it('has different message for shared vs solo', () => {
+    const shared = taskDone(true, null, false);
+    const solo = taskDone(false, null, false);
+    expect(shared).not.toBe(solo);
+  });
+
+  it('acknowledges overdue completion', () => {
+    const result = taskDone(true, null, true);
+    expect(result.toLowerCase()).toContain('late');
+  });
+
+  it('credits the assigned person', () => {
+    const result = taskDone(true, 'Sarah', false);
+    expect(result).toContain('Sarah');
+  });
+});
+
+describe('allClear', () => {
+  it('returns null for 0 completed', () => {
+    expect(allClear(0)).toBeNull();
+  });
+
+  it('returns encouragement for completions', () => {
+    expect(typeof allClear(3)).toBe('string');
+    expect(allClear(3)).toContain('3');
+  });
+});
+
+describe('overdueReframe', () => {
+  it('returns null for 0', () => {
+    expect(overdueReframe(0)).toBeNull();
+  });
+
+  it('frames 1 overdue as quick win', () => {
+    const result = overdueReframe(1);
+    expect(result.toLowerCase()).toContain('one');
+  });
+
+  it('reframes many overdue without shame', () => {
+    const result = overdueReframe(5);
+    expect(result).not.toContain('bad');
+    expect(result).not.toContain('fail');
+    expect(result).toContain('help');
+  });
+});
+
+describe('streakInsight', () => {
+  it('returns null for < 2 days', () => {
+    expect(streakInsight(0, 'Sarah')).toBeNull();
+    expect(streakInsight(1, 'Sarah')).toBeNull();
+  });
+
+  it('escalates with longer streaks', () => {
+    const short = streakInsight(3, 'Mike');
+    const long = streakInsight(15, 'Mike');
+    expect(short).toContain('Mike');
+    expect(long).toContain('15');
+    expect(long).not.toBe(short);
+  });
+
+  it('gives strong recognition at 30+ days', () => {
+    const result = streakInsight(35, 'Sarah');
+    expect(result).toContain('commitment');
+  });
+});
+
+describe('balanceInsight', () => {
+  it('handles no activity', () => {
+    expect(balanceInsight(50, 'Sarah', 0, 0)).toContain('early');
+  });
+
+  it('praises balance', () => {
+    const result = balanceInsight(50, 'Sarah', 3, 3);
+    expect(result).toContain('same weight');
+  });
+
+  it('gently notes imbalance', () => {
+    const result = balanceInsight(30, 'Sarah', 1, 5);
+    expect(result).toContain('Sarah');
+    expect(result).not.toContain('lazy');
+  });
+});
+
+describe('eventSharing', () => {
+  it('returns null for private non-yours event', () => {
+    expect(eventSharing(0, false)).toBeNull();
+  });
+
+  it('encourages sharing for your private event', () => {
+    const result = eventSharing(0, true);
+    expect(result).toContain('share');
+  });
+
+  it('credits you for bringing people together', () => {
+    const result = eventSharing(3, true);
+    expect(result).toContain('together');
+  });
+});
+
+describe('eventCreated', () => {
+  it('acknowledges even solo events', () => {
+    const result = eventCreated(false, 0);
+    expect(result).toContain('calendar');
+  });
+
+  it('values sharing', () => {
+    const result = eventCreated(true, 2);
+    expect(result).toContain('2');
+  });
+});
+
+describe('bondNarrative', () => {
+  it('handles fresh connection', () => {
+    const result = bondNarrative(0, 0, 50, 'Emma');
+    expect(result).toContain('Emma');
+    expect(result).toContain('beginning');
+  });
+
+  it('gives strong narrative for healthy relationship', () => {
+    const result = bondNarrative(25, 10, 50, 'Sarah');
+    expect(result).toContain('Sarah');
+    expect(result).toContain('strong');
+  });
+});
+
+describe('levelUp', () => {
+  it('includes level number and title', () => {
+    const result = levelUp(5, 'Thoughtful Planner');
+    expect(result).toContain('5');
+    expect(result).toContain('Thoughtful Planner');
+  });
+
+  it('escalates tone at higher levels', () => {
+    const early = levelUp(2, 'Getting Comfortable');
+    const late = levelUp(18, 'Party Starter');
+    expect(late).toContain('Not many');
+  });
+});
+
+describe('empty states', () => {
+  it('emptyDay differentiates weekends', () => {
+    const weekday = emptyDay(false);
+    const weekend = emptyDay(true);
+    expect(weekday).not.toBe(weekend);
+    expect(weekend.toLowerCase()).toContain('weekend');
+  });
+
+  it('noTasks returns a string', () => {
+    expect(typeof noTasks()).toBe('string');
+  });
+
+  it('emptyConnection uses name', () => {
+    expect(emptyConnection('Mike')).toContain('Mike');
+  });
+});
