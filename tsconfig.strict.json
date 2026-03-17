@@ -1,0 +1,44 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    // Keep overall strictness, but temporarily allow implicit any during the final ratchet.
+    // This keeps the gate passing while we tighten file-by-file.
+    "noImplicitAny": false,
+    "strictNullChecks": true,
+
+    // Gradual strict adoption:
+    // - keep noUnused* off until the project is mostly migrated
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+
+    // Do not typecheck JS during migration
+    "allowJs": false,
+    "checkJs": false,
+
+    // NOTE: Do not force Node/Jest type packages here.
+    // This project is often installed without dev type deps in constrained environments.
+    // If you have @types/node and @types/jest locally, you can add them back.
+  },
+  "include": [
+    "src/navigation/**/*",
+    "src/services/**/*",
+    "src/types/**/*",
+    "src/utils/**/*",
+    "src/config/**/*",
+
+    // Gradual screen ratchet (home → calendar → share).
+    // Other screens remain outside the strict gate until migrated.
+    "src/screens/home/**/*",
+    "src/screens/calendar/**/*",
+    "src/screens/share/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "App.js",
+    "src/insights.js",
+    "src/services/_internal/**/*",
+    "src/ui/**/*",
+    "src/components/**/*"
+  ]
+}

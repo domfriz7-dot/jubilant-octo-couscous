@@ -1,0 +1,138 @@
+{
+  "expo": {
+    "name": "U&Me",
+    "slug": "uandme",
+    "privacy": "public",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FAF9F7"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.uandme.app",
+      "buildNumber": "1",
+      "backgroundColor": "#FAF9F7",
+      "infoPlist": {
+        "NSCalendarsUsageDescription": "U&Me syncs your shared plans with your device calendar so you never miss a moment.",
+        "NSCalendarsFullAccessUsageDescription": "U&Me needs full calendar access to create, update and sync your shared events directly to your device calendar.",
+        "NSCalendarsWriteOnlyAccessUsageDescription": "U&Me needs calendar write access to add your shared plans to your device calendar.",
+        "NSRemindersUsageDescription": "U&Me creates reminders to keep you and your partner in sync before important plans.",
+        "NSPhotoLibraryUsageDescription": "U&Me lets you attach memories and photos to your shared events and moments.",
+        "NSPhotoLibraryAddUsageDescription": "U&Me saves your couple wallpapers and shared card images to your photo library.",
+        "NSLocationWhenInUseUsageDescription": "U&Me uses your location to suggest nearby date ideas and venues.",
+        "UIBackgroundModes": [
+          "remote-notification",
+          "fetch"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "entitlements": {
+        "aps-environment": "production"
+      },
+      "googleServicesFile": "./GoogleService-Info.plist"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#B8897A"
+      },
+      "package": "com.uandme.app",
+      "versionCode": 1,
+      "permissions": [
+        "READ_CALENDAR",
+        "WRITE_CALENDAR",
+        "READ_MEDIA_IMAGES",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
+        "POST_NOTIFICATIONS"
+      ],
+      "googleServicesFile": "./google-services.json"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#B09080",
+          "sounds": [],
+          "enableBackgroundRemoteNotifications": true
+        }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "U&Me syncs your shared plans with your device calendar so you never miss a moment.",
+          "remindersPermission": "U&Me creates reminders to keep you and your partner in sync before important plans."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "U&Me uses your location to suggest nearby date ideas and venues."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "U&Me lets you attach memories and photos to your shared events and moments.",
+          "cameraPermission": false
+        }
+      ],
+      [
+        "expo-sqlite",
+        {
+          "enableFTS": false,
+          "useSQLCipher": false
+        }
+      ],
+      [
+        "expo-updates",
+        {
+          "username": "domfriz"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.1"
+          },
+          "android": {
+            "minSdkVersion": 26,
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35
+          }
+        }
+      ],
+      "./plugins/withRemoveEnableBundleCompression"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "e80a03a7-87b0-4291-9c46-3c3de2635ed8"
+      },
+      "privacyPolicyUrl": "https://uandme.app/privacy",
+      "termsOfServiceUrl": "https://uandme.app/terms"
+    },
+    "scheme": "uandme",
+    "owner": "domfriz",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
+  }
+}

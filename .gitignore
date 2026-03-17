@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+
+# Environment variables (contains secrets)
+.env
+.env.local
+.env.*.local
+
+# Native builds
+ios/
+android/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# Credentials
+google-service-account.json
+google-services.json
+GoogleService-Info.plist
+
+# Logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
