@@ -1,182 +1,38 @@
-import { useCallback, useEffect, useState } from 'react';
-import InviteService from '../services/InviteService';
-import ConnectionsService from '../services/ConnectionsService';
-import { logError } from '../services/logger';
-import type { Connection } from '../types/connections';
+import React, { useState } from 'react';
+import { View, TextInput, TouchableOpacity, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { Feather } from '@expo/vector-icons';
+import { useAppTheme } from '../theme/ThemeProvider';
+import { tokens } from '../../config/tokens';
+import { useTranslate } from '../../i18n';
 
-type SentInvite = Awaited<ReturnType<typeof InviteService.getSentInvites>>[number];
-type InviteLookupResult = Awaited<ReturnType<typeof InviteService.lookupInvite>>;
+type SearchBarProps = {
+  value: string;
+  onChangeText: (value: string) => void;
+  placeholder?: string;
+  style?: StyleProp<ViewStyle>;
+};
 
-/**
- * Reactive hook for the invite system.
- * Drives both the "invite someone" and "accept a code" flows.
- *
- * @param {{ prefillCode?: string }} opts
- */
-export type UseInvitesOptions = { prefillCode?: string };
-
-export function useInvites({ prefillCode }: UseInvitesOptions = {}) {
-  const [myCode, setMyCode] = useState('');
-  const [sentInvites, setSentInvites] = useState<SentInvite[]>([]);
-  const [connections, setConnections] = useState<Connection[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  // Accept form state
-  const [acceptCode, setAcceptCode] = useState(prefillCode || '');
-  const [acceptName, setAcceptName] = useState('');
-  const [acceptRelationship, setAcceptRelationship] = useState('partner');
-  const [lookupResult, setLookupResult] = useState<InviteLookupResult>(null);
-  const [lookupLoading, setLookupLoading] = useState(false);
-
-  // ── Load data ───────────────────────────────────────────
-  const reload = useCallback(async () => {
-    try {
-      const [code, invites, conns] = await Promise.all([
-        InviteService.getMyCode(),
-        InviteService.getSentInvites(),
-        ConnectionsService.getConnections(),
-      ]);
-      setMyCode(code);
-      setSentInvites(invites);
-      setConnections(Array.isArray(conns) ? conns : []);
-    } catch (e) {
-      logError('useInvites:reload', e);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    reload();
-    const unsub1 = InviteService.subscribe(reload);
-    const unsub2 = ConnectionsService.subscribe(reload);
-    return () => { unsub1(); unsub2(); };
-  }, [reload]);
-
-  // Prefill
-  useEffect(() => {
-    if (prefillCode) setAcceptCode(String(prefillCode));
-  }, [prefillCode]);
-
-  // ── Create invite ───────────────────────────────────────
-  const createInvite = useCallback(async ({ toEmail, toName, relationship }: { toEmail?: string; toName?: string; relationship?: string } = {}) => {
-    const invite = await InviteService.createInvite({ toEmail, toName, relationship });
-    await reload();
-    return invite;
-  }, [reload]);
-
-  // ── Lookup (show who sent it before accepting) ──────────
-  const lookupCode = useCallback(async (code: string) => {
-    const normalized = String(code || '').trim();
-    if (normalized.length < 4) {
-      setLookupResult(null);
-      return null;
-    }
-    setLookupLoading(true);
-    try {
-      const result = await InviteService.lookupInvite(normalized);
-      setLookupResult(result);
-      return result;
-    } catch (e) {
-      logError('useInvites:lookup', e);
-      setLookupResult(null);
-      return null;
-    } finally {
-      setLookupLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const normalized = String(acceptCode || '').trim();
-    if (normalized.length < 4) {
-      setLookupResult(null);
-      return;
-    }
-    const timer = setTimeout(() => { lookupCode(normalized); }, 180);
-    return () => clearTimeout(timer);
-  }, [acceptCode, lookupCode]);
-
-  // ── Accept invite ───────────────────────────────────────
-  const acceptInvite = useCallback(async () => {
-    const code = String(acceptCode || '').trim();
-    if (code.length < 4) throw new Error('Please enter a valid invite code');
-
-    const { connection } = await InviteService.acceptInvite(code, {
-      name: acceptName.trim() || 'Connected User',
-      relationship: acceptRelationship,
-    });
-
-    // Reset form
-    setAcceptCode('');
-    setAcceptName('');
-    setLookupResult(null);
-    await reload();
-
-    return connection;
-  }, [acceptCode, acceptName, acceptRelationship, reload]);
-
-  // ── Revoke / Resend ─────────────────────────────────────
-  const revokeInvite = useCallback(async (inviteId: string) => {
-    await InviteService.revokeInvite(inviteId);
-    await reload();
-  }, [reload]);
-
-  const resendInvite = useCallback(async (inviteId: string) => {
-    const invite = await InviteService.resendInvite(inviteId);
-    await reload();
-    return invite;
-  }, [reload]);
-
-  // ── Regenerate code ─────────────────────────────────────
-  const regenerateCode = useCallback(async () => {
-    const code = await InviteService.regenerateMyCode();
-    setMyCode(code);
-    return code;
-  }, []);
-
-  // ── Remove connection ───────────────────────────────────
-  const removeConnection = useCallback(async (connectionId: string) => {
-    await ConnectionsService.removeConnection(connectionId);
-    await reload();
-  }, [reload]);
-
-  // ── Derived state ───────────────────────────────────────
-  const pendingInvites = sentInvites.filter(i => i.status === 'pending');
-  const acceptedInvites = sentInvites.filter(i => i.status === 'accepted');
-  const isAcceptValid = String(acceptCode || '').trim().length >= 4;
-
-  return {
-    // My code
-    myCode,
-    regenerateCode,
-
-    // Sent invites
-    sentInvites,
-    pendingInvites,
-    acceptedInvites,
-    createInvite,
-    revokeInvite,
-    resendInvite,
-
-    // Accept flow
-    acceptCode,
-    setAcceptCode,
-    acceptName,
-    setAcceptName,
-    acceptRelationship,
-    setAcceptRelationship,
-    isAcceptValid,
-    lookupResult,
-    lookupLoading,
-    lookupCode,
-    acceptInvite,
-
-    // Connections
-    connections,
-    removeConnection,
-
-    // State
-    loading,
-    reload,
-  };
+export default function SearchBar({ value, onChangeText, placeholder = 'Search…', style }: SearchBarProps) {
+  const { theme, isDark } = useAppTheme();
+  const tr = useTranslate();
+  const [focused, setFocused] = useState(false);
+  return (
+    <View style={[st.wrap, { backgroundColor: isDark ? theme.bg.elevated : theme.bg.subtle, borderColor: focused ? theme.accent.primary + '50' : (theme.divider || theme.border) }, style]}>
+      <Feather name="search" size={16} color={focused ? theme.accent.primary : theme.text.tertiary} style={{ marginRight: 10 }} />
+      <TextInput value={value} onChangeText={onChangeText} placeholder={typeof placeholder === 'string' ? tr(placeholder) : placeholder} placeholderTextColor={theme.text.tertiary}
+        style={[st.input, { color: theme.text.primary }]} autoCapitalize="none" autoCorrect={false} returnKeyType="search"
+        onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} />
+      {value?.length > 0 ? (
+        <TouchableOpacity accessibilityRole="button" onPress={() => onChangeText('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={[st.clear, { backgroundColor: theme.text.tertiary + '20' }]}>
+          <Feather name="x" size={12} color={theme.text.tertiary} />
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
 }
+const st = StyleSheet.create({
+  wrap: { flexDirection: 'row', alignItems: 'center', height: 52, borderRadius: 16, paddingHorizontal: 16, borderWidth: 1 },
+  input: { flex: 1, fontSize: tokens.type.size.md, paddingVertical: 0 },
+  clear: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginLeft: 10 },
+});
