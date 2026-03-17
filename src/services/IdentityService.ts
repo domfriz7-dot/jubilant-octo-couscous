@@ -1,5 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Crypto from 'expo-crypto';
 
 const IDENTITY_KEY = '@uandme/identity';
 
@@ -9,6 +8,12 @@ interface Identity {
 }
 
 let _identity: Identity | null = null;
+
+/** Generate a random hex string without any native crypto dependency. */
+function makeLocalId(): string {
+  const rand = () => Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, '0');
+  return `local_${rand()}${rand()}`.slice(0, 24);
+}
 
 /** Initialise (or restore) a stable local identity for this device. */
 export async function initIdentityResult(): Promise<Identity> {
@@ -20,12 +25,7 @@ export async function initIdentityResult(): Promise<Identity> {
     return _identity;
   }
 
-  const userId = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    `${Date.now()}-${Math.random()}`
-  ).then((hash) => `local_${hash.slice(0, 16)}`);
-
-  _identity = { userId, createdAt: new Date().toISOString() };
+  _identity = { userId: makeLocalId(), createdAt: new Date().toISOString() };
   await AsyncStorage.setItem(IDENTITY_KEY, JSON.stringify(_identity));
   return _identity;
 }

@@ -54,7 +54,9 @@
     "@segment/analytics-react-native": "^2.21.4",
     "zod": "^3.24.1",
     "@segment/sovran-react-native": "*",
-    "@shopify/flash-list": "~2.0.2"
+    "@shopify/flash-list": "~2.0.2",
+    "@react-native-community/netinfo": "^11.4.1",
+    "expo-crypto": "~14.0.2"
   },
   "devDependencies": {
     "@babel/core": "^7.25.0",

@@ -29,7 +29,9 @@ export default function XPNotification({ visible, xp, reason, onHide }: Props): 
       ]).start(() => onHide());
     }, 2500);
     return () => clearTimeout(timer);
-  }, [visible, opacity, translateY, onHide]);
+    // opacity and translateY are Animated.Value refs — stable, intentionally omitted from deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, onHide]);
 
   if (!visible) return <></>;
 

@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,6 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { useAppTheme } from '../ui/theme/ThemeProvider';
@@ -26,10 +26,22 @@ const MOCK_USERS = [
   { id: 'u2', name: 'Sam' },
 ];
 
+function isValidDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const d = new Date(value);
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
+}
+
+function isValidTime(value: string): boolean {
+  if (!/^\d{2}:\d{2}$/.test(value)) return false;
+  const [hh, mm] = value.split(':').map(Number);
+  return hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59;
+}
+
 export default function AddEventScreen(): JSX.Element {
   const { theme } = useAppTheme();
   const { top, bottom } = useSafeAreaInsets();
-  const nav = useNavigation<any>();
+  const nav = useNavigation<StackNavigationProp<RootStackParamList, 'AddEvent'>>();
   const { params } = useRoute<RouteType>();
 
   const [title, setTitle] = useState('');
@@ -48,8 +60,18 @@ export default function AddEventScreen(): JSX.Element {
 
   const handleSave = async () => {
     if (!title.trim()) { setError('Please enter a title.'); return; }
-    if (!date.match(/^\d{4}-\d{2}-\d{2}$/)) { setError('Date must be YYYY-MM-DD.'); return; }
-    if (!time.match(/^\d{2}:\d{2}$/)) { setError('Time must be HH:MM.'); return; }
+
+    // Validate date: format YYYY-MM-DD and must be a real calendar date
+    if (!isValidDate(date)) { setError('Date must be a valid date (YYYY-MM-DD).'); return; }
+
+    // Validate time: format HH:MM with valid range
+    if (!isValidTime(time)) { setError('Start time must be a valid time (HH:MM).'); return; }
+
+    // Validate optional end time only if provided
+    if (endTime.trim() && !isValidTime(endTime.trim())) {
+      setError('End time must be a valid time (HH:MM).');
+      return;
+    }
     setError('');
     setSaving(true);
     try {
@@ -75,11 +97,16 @@ export default function AddEventScreen(): JSX.Element {
   return (
     <KeyboardAvoidingView
       style={[styles.root, { backgroundColor: theme.bg.default }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior="padding"
     >
       {/* Header bar */}
       <View style={[styles.header, { paddingTop: top + SPACING.md, borderBottomColor: theme.border.default }]}>
-        <TouchableOpacity onPress={() => nav.goBack()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <TouchableOpacity
+          onPress={() => nav.goBack()}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityLabel="Discard and close"
+          accessibilityRole="button"
+        >
           <Ionicons name="close" size={24} color={theme.text.primary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.text.primary }]}>New Event</Text>

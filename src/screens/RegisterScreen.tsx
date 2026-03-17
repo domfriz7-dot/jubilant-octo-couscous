@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -59,7 +58,7 @@ export default function RegisterScreen(): JSX.Element {
   return (
     <KeyboardAvoidingView
       style={[styles.root, { backgroundColor: theme.bg.default }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior="padding"
     >
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingTop: top + SPACING.xxl, paddingBottom: bottom + SPACING.xxxl }]}

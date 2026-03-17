@@ -57,22 +57,36 @@ export default function useBootstrapXP(): BootstrapXPResult {
       .catch((e) => reportError('useBootstrapXP.load', e));
   }, []);
 
+  // Use the functional form of setState so this callback never captures stale xpState.
   const awardXP = useCallback(async (amount: number, reason: string) => {
     try {
-      const newTotal = xpState.total + amount;
-      const newLevel = Math.floor(newTotal / XP_PER_LEVEL) + 1;
-      const didLevelUp = newLevel > xpState.level;
-      const updated = { total: newTotal, level: newLevel };
-      setXPState(updated);
-      await AsyncStorage.setItem(XP_KEY, JSON.stringify(updated));
+      let updatedState: XPState | null = null;
+      let didLevelUp = false;
+
+      setXPState((prev) => {
+        const newTotal = prev.total + amount;
+        const newLevel = Math.floor(newTotal / XP_PER_LEVEL) + 1;
+        didLevelUp = newLevel > prev.level;
+        updatedState = { total: newTotal, level: newLevel };
+        return updatedState;
+      });
+
+      // Persist after the state update is queued; read from updatedState which
+      // is set synchronously inside the updater above.
+      if (updatedState) {
+        await AsyncStorage.setItem(XP_KEY, JSON.stringify(updatedState));
+      }
+
       setXPToast({ visible: true, xp: amount, reason });
-      if (didLevelUp) {
-        setLevelUp({ visible: true, levelData: { level: newLevel, title: getLevelTitle(newLevel) } });
+
+      if (didLevelUp && updatedState) {
+        const level = (updatedState as XPState).level;
+        setLevelUp({ visible: true, levelData: { level, title: getLevelTitle(level) } });
       }
     } catch (e) {
       reportError('useBootstrapXP.award', e);
     }
-  }, [xpState]);
+  }, []);
 
   const hideXPToast = useCallback(() => setXPToast((t) => ({ ...t, visible: false })), []);
   const closeLevelUp = useCallback(() => setLevelUp({ visible: false, levelData: null }), []);

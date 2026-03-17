@@ -19,7 +19,9 @@ export default function OfflineBanner({ visible, onRetry }: Props): JSX.Element 
       tension: 80,
       friction: 10,
     }).start();
-  }, [visible, translateY]);
+    // translateY is an Animated.Value ref — stable, intentionally omitted from deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
   return (
     <Animated.View

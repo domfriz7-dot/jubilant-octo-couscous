@@ -70,6 +70,8 @@ export default function HomeScreen(): JSX.Element {
           onPress={openAdd}
           style={styles.addBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityLabel="Add event"
+          accessibilityRole="button"
         >
           <Ionicons name="add" size={26} color={PALETTE.white} />
         </TouchableOpacity>

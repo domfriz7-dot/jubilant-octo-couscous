@@ -100,6 +100,8 @@ export default function ConnectionsScreen(): JSX.Element {
                 <TouchableOpacity
                   style={[styles.inviteBtn, { backgroundColor: theme.primary, opacity: inviteEmail.trim() ? 1 : 0.4 }]}
                   disabled={!inviteEmail.trim()}
+                  accessibilityLabel="Send invite"
+                  accessibilityRole="button"
                 >
                   <Ionicons name="send" size={18} color={PALETTE.white} />
                 </TouchableOpacity>

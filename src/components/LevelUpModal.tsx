@@ -31,7 +31,9 @@ export default function LevelUpModal({ visible, levelData, onClose }: Props): JS
       Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 60, friction: 7 }),
       Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
     ]).start();
-  }, [visible, scale, opacity]);
+    // scale and opacity are Animated.Value refs — stable, intentionally omitted from deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
   const handleClose = () => {
     Animated.parallel([

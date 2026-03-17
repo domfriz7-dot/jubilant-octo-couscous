@@ -55,6 +55,8 @@ export default function CalendarScreen(): JSX.Element {
         <TouchableOpacity
           onPress={() => nav.navigate('AddEvent', { selectedDate })}
           style={[styles.addBtn, { backgroundColor: theme.primary }]}
+          accessibilityLabel="Add event"
+          accessibilityRole="button"
         >
           <Ionicons name="add" size={20} color={PALETTE.white} />
         </TouchableOpacity>

@@ -10,6 +10,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { useAppTheme } from '../ui/theme/ThemeProvider';
@@ -32,7 +33,7 @@ interface DetailRow {
 export default function EventDetailsScreen(): JSX.Element {
   const { theme } = useAppTheme();
   const { top, bottom } = useSafeAreaInsets();
-  const nav = useNavigation<any>();
+  const nav = useNavigation<StackNavigationProp<RootStackParamList, 'EventDetails'>>();
   const { params } = useRoute<RouteType>();
   const [event, setEvent] = useState<CalendarEvent | null>(null);
 
@@ -88,6 +89,8 @@ export default function EventDetailsScreen(): JSX.Element {
           onPress={() => nav.goBack()}
           style={styles.backBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityLabel="Close"
+          accessibilityRole="button"
         >
           <Ionicons name="chevron-down" size={24} color={PALETTE.white} />
         </TouchableOpacity>

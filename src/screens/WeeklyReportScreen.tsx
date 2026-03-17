@@ -3,9 +3,11 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
+import { RootStackParamList } from '../navigation/RootNavigator';
 import { useAppTheme } from '../ui/theme/ThemeProvider';
-import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../ui/theme/tokens';
+import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE, ThemeColors } from '../ui/theme/tokens';
 import CalendarService from '../services/CalendarService';
 
 function getWeekRange(): { start: string; end: string; label: string } {
@@ -23,7 +25,7 @@ function getWeekRange(): { start: string; end: string; label: string } {
 export default function WeeklyReportScreen(): JSX.Element {
   const { theme } = useAppTheme();
   const { top, bottom } = useSafeAreaInsets();
-  const nav = useNavigation<any>();
+  const nav = useNavigation<StackNavigationProp<RootStackParamList, 'WeeklyReport'>>();
 
   const { start, end, label } = getWeekRange();
   const events = useMemo(() => {
@@ -57,7 +59,12 @@ export default function WeeklyReportScreen(): JSX.Element {
           colors={theme.gradient.primary}
           style={[styles.header, { paddingTop: top + SPACING.lg }]}
         >
-          <TouchableOpacity onPress={() => nav.goBack()} style={styles.backBtn}>
+          <TouchableOpacity
+            onPress={() => nav.goBack()}
+            style={styles.backBtn}
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
+          >
             <Ionicons name="chevron-back" size={24} color={PALETTE.white} />
           </TouchableOpacity>
           <Text style={styles.headerLabel}>Weekly Report</Text>
@@ -141,7 +148,7 @@ export default function WeeklyReportScreen(): JSX.Element {
 }
 
 function StatCard({ theme, emoji, value, label, suffix = '' }: {
-  theme: any;
+  theme: ThemeColors;
   emoji: string;
   value: number;
   label: string;

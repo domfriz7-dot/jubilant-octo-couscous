@@ -102,6 +102,8 @@ export default function TasksScreen(): JSX.Element {
           onPress={handleAdd}
           style={[styles.addBtn, { backgroundColor: theme.primary, opacity: input.trim() ? 1 : 0.4 }]}
           disabled={!input.trim()}
+          accessibilityLabel="Add task"
+          accessibilityRole="button"
         >
           <Ionicons name="add" size={20} color={PALETTE.white} />
         </TouchableOpacity>
