@@ -97,13 +97,16 @@ function AppShell(): JSX.Element {
   const navigationRef = useRef<any>(null);
   const routeNameRef = useRef<string | null>(null);
   const pendingNotificationRef = useRef<NotificationPayload | null>(null);
-  const [navReady, setNavReady] = useState(false);
+  // Use a ref (not state) so handleNotificationNav always reads the current
+  // value without needing to be recreated — avoids a stale-closure bug where
+  // navReady was still false inside the callback when onReady fired.
+  const navReadyRef = useRef(false);
 
   const handleNotificationNav = useCallback((data: NotificationPayload) => {
     const nav = navigationRef?.current;
     if (!data?.kind) return;
     // If nav isn't ready yet, queue the latest payload.
-    if (!navReady || !nav?.navigate) {
+    if (!navReadyRef.current || !nav?.navigate) {
       pendingNotificationRef.current = data;
       return;
     }
@@ -137,7 +140,7 @@ function AppShell(): JSX.Element {
       reportError('App', e as any);
       pendingNotificationRef.current = data;
     }
-  }, [navReady]);
+  }, []);
 
   // Bootstrap side-effects (kept out of AppShell body logic)
   useBootstrapTelemetry();
@@ -190,7 +193,7 @@ function AppShell(): JSX.Element {
           <NavigationContainer
             ref={navigationRef}
             onReady={() => {
-              setNavReady(true);
+              navReadyRef.current = true;
               const pending = pendingNotificationRef.current;
               pendingNotificationRef.current = null;
               if (pending) handleNotificationNav(pending);
@@ -203,7 +206,9 @@ function AppShell(): JSX.Element {
                   routeNameRef.current = current;
                   trackScreen(current);
                 }
-              } catch (e) { reportError('App', e as any); }
+              } catch (e) {
+                reportError('App', e as any);
+              }
             }}
           >
             {authEnabled && !user ? <AuthNavigator /> : <RootNavigator />}

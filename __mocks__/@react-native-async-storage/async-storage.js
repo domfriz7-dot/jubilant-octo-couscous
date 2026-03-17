@@ -62,8 +62,7 @@ const AsyncStorage = {
   }),
 
   multiMerge: jest.fn((pairs) => {
-    pairs.forEach(([k, v]) => AsyncStorage.mergeItem(k, v));
-    return Promise.resolve();
+    return Promise.all(pairs.map(([k, v]) => AsyncStorage.mergeItem(k, v))).then(() => undefined);
   }),
 };
 
