@@ -133,14 +133,15 @@ function AppShell(): JSX.Element {
         default:
           break;
       }
-    } catch (e) { reportError('App', e as any); pendingNotificationRef.current = data;
+    } catch (e) {
+      reportError('App', e as any);
+      pendingNotificationRef.current = data;
     }
   }, [navReady]);
 
   // Bootstrap side-effects (kept out of AppShell body logic)
   useBootstrapTelemetry();
   const { enabled: authEnabled, ready: authReady, user } = useBootstrapAuth();
-  
   useBootstrapSubscriptions();
   useBootstrapRuntimeSafety();
   useBootstrapDeepLinks(navigationRef);
@@ -153,7 +154,6 @@ function AppShell(): JSX.Element {
   useEffect(() => {
     PlacesKeyService.init();
   }, []);
-
 
   // Register for push notifications & set up tap-to-navigate routing
   useEffect(() => {
