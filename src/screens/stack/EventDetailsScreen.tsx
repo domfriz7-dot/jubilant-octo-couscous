@@ -14,15 +14,11 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../../navigation/RootNavigator';
 import { useAppTheme } from '../../ui/theme/ThemeProvider';
-import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE, EVENT_COLORS } from '../../ui/theme/tokens';
+import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../../ui/theme/tokens';
 import CalendarService, { CalendarEvent } from '../../services/CalendarService';
+import { getConnectionById } from '../../services/ConnectionsService';
 
 type RouteType = RouteProp<RootStackParamList, 'EventDetails'>;
-
-const MOCK_USERS: Record<string, { name: string; color: string }> = {
-  u1: { name: 'Jordan', color: EVENT_COLORS[0] },
-  u2: { name: 'Sam', color: EVENT_COLORS[2] },
-};
 
 interface DetailRow {
   icon: React.ComponentProps<typeof Ionicons>['name'];
@@ -128,7 +124,7 @@ export default function EventDetailsScreen(): JSX.Element {
             <Text style={[styles.sectionTitle, { color: theme.text.secondary }]}>Shared with</Text>
             <View style={[styles.card, { backgroundColor: theme.bg.card, borderColor: theme.border.default }, SHADOW.sm]}>
               {event.sharedWith.map((uid, i) => {
-                const user = MOCK_USERS[uid];
+                const user = getConnectionById(uid);
                 if (!user) return null;
                 return (
                   <React.Fragment key={uid}>

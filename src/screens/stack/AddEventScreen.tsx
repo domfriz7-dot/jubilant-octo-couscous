@@ -18,13 +18,9 @@ import { useAppTheme } from '../../ui/theme/ThemeProvider';
 import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE, EVENT_COLORS } from '../../ui/theme/tokens';
 import CalendarService from '../../services/CalendarService';
 import { getUserId } from '../../services/IdentityService';
+import { getActiveConnections } from '../../services/ConnectionsService';
 
 type RouteType = RouteProp<RootStackParamList, 'AddEvent'>;
-
-const MOCK_USERS = [
-  { id: 'u1', name: 'Jordan' },
-  { id: 'u2', name: 'Sam' },
-];
 
 function isValidDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -223,7 +219,7 @@ export default function AddEventScreen(): JSX.Element {
         {/* Share with */}
         <Text style={[styles.sectionLabel, { color: theme.text.secondary }]}>Share with</Text>
         <View style={[styles.card, { backgroundColor: theme.bg.card, borderColor: theme.border.default }, SHADOW.sm]}>
-          {MOCK_USERS.map((u, i) => (
+          {getActiveConnections().map((u, i) => (
             <React.Fragment key={u.id}>
               {i > 0 && <View style={[styles.divider, { backgroundColor: theme.border.subtle }]} />}
               <TouchableOpacity

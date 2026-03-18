@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   FlatList,
   StyleSheet,
   Text,
@@ -11,27 +13,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../ui/theme/ThemeProvider';
-import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE, EVENT_COLORS } from '../../ui/theme/tokens';
-
-interface Connection {
-  id: string;
-  name: string;
-  email: string;
-  color: string;
-  status: 'active' | 'pending';
-}
-
-// Demo data — in production this comes from the backend
-const DEMO_CONNECTIONS: Connection[] = [
-  { id: 'u1', name: 'Jordan', email: 'jordan@example.com', color: EVENT_COLORS[0], status: 'active' },
-  { id: 'u2', name: 'Sam', email: 'sam@example.com', color: EVENT_COLORS[2], status: 'active' },
-  { id: 'u3', name: 'Riley', email: 'riley@example.com', color: EVENT_COLORS[4], status: 'pending' },
-];
+import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../../ui/theme/tokens';
+import { getConnections, Connection } from '../../services/ConnectionsService';
 
 function Avatar({ name, color, size = 44 }: { name: string; color: string; size?: number }) {
   const initials = name.trim().charAt(0).toUpperCase();
   return (
-    <View style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: color, alignItems: 'center', justifyContent: 'center' }]}>
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color, alignItems: 'center', justifyContent: 'center' }}>
       <Text style={{ ...TYPOGRAPHY.bodyBold, color: PALETTE.white, fontSize: size * 0.4 }}>{initials}</Text>
     </View>
   );
@@ -42,12 +30,40 @@ export default function ConnectionsScreen(): JSX.Element {
   const { top } = useSafeAreaInsets();
   const [search, setSearch] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviting, setInviting] = useState(false);
 
-  const filtered = DEMO_CONNECTIONS.filter(
+  const connections = getConnections();
+
+  const filtered = connections.filter(
     (c) =>
       c.name.toLowerCase().includes(search.toLowerCase()) ||
       c.email.toLowerCase().includes(search.toLowerCase())
   );
+
+  const activeCount = connections.filter((c) => c.status === 'active').length;
+
+  const handleSendInvite = async () => {
+    const email = inviteEmail.trim().toLowerCase();
+    if (!email) return;
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      Alert.alert('Invalid email', 'Please enter a valid email address.');
+      return;
+    }
+
+    setInviting(true);
+    try {
+      // In production: call backend API to send invite
+      await new Promise<void>((resolve) => setTimeout(resolve, 800));
+      setInviteEmail('');
+      Alert.alert('Invite sent!', `An invitation has been sent to ${email}.`);
+    } catch {
+      Alert.alert('Error', 'Could not send invite. Please try again.');
+    } finally {
+      setInviting(false);
+    }
+  };
 
   return (
     <View style={[styles.root, { backgroundColor: theme.bg.default }]}>
@@ -57,9 +73,7 @@ export default function ConnectionsScreen(): JSX.Element {
         style={[styles.header, { paddingTop: top + SPACING.lg }]}
       >
         <Text style={styles.headerTitle}>People</Text>
-        <Text style={styles.headerSub}>
-          {DEMO_CONNECTIONS.filter((c) => c.status === 'active').length} connections
-        </Text>
+        <Text style={styles.headerSub}>{activeCount} {activeCount === 1 ? 'connection' : 'connections'}</Text>
       </LinearGradient>
 
       <FlatList
@@ -79,6 +93,11 @@ export default function ConnectionsScreen(): JSX.Element {
                 placeholder="Search connections…"
                 placeholderTextColor={theme.text.tertiary}
               />
+              {search.length > 0 && (
+                <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close-circle" size={18} color={theme.text.tertiary} />
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Invite card */}
@@ -96,14 +115,26 @@ export default function ConnectionsScreen(): JSX.Element {
                   placeholderTextColor={theme.text.tertiary}
                   keyboardType="email-address"
                   autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="send"
+                  onSubmitEditing={handleSendInvite}
+                  editable={!inviting}
                 />
                 <TouchableOpacity
-                  style={[styles.inviteBtn, { backgroundColor: theme.primary, opacity: inviteEmail.trim() ? 1 : 0.4 }]}
-                  disabled={!inviteEmail.trim()}
+                  style={[
+                    styles.inviteBtn,
+                    { backgroundColor: theme.primary, opacity: inviteEmail.trim() && !inviting ? 1 : 0.4 },
+                  ]}
+                  disabled={!inviteEmail.trim() || inviting}
+                  onPress={handleSendInvite}
                   accessibilityLabel="Send invite"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="send" size={18} color={PALETTE.white} />
+                  {inviting ? (
+                    <ActivityIndicator size="small" color={PALETTE.white} />
+                  ) : (
+                    <Ionicons name="send" size={18} color={PALETTE.white} />
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
@@ -112,9 +143,23 @@ export default function ConnectionsScreen(): JSX.Element {
           </>
         }
         ListEmptyComponent={
-          <Text style={[styles.emptyText, { color: theme.text.secondary }]}>No connections found.</Text>
+          search.length > 0 ? (
+            <View style={styles.emptyWrap}>
+              <Text style={[styles.emptyText, { color: theme.text.secondary }]}>No results for "{search}".</Text>
+              <TouchableOpacity onPress={() => setSearch('')}>
+                <Text style={[styles.emptyLink, { color: theme.text.accent }]}>Clear search</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.emptyWrap}>
+              <Text style={[styles.emptyText, { color: theme.text.secondary }]}>No connections yet.</Text>
+              <Text style={[styles.emptyHint, { color: theme.text.tertiary }]}>
+                Use the invite box above to add someone.
+              </Text>
+            </View>
+          )
         }
-        renderItem={({ item }) => (
+        renderItem={({ item }: { item: Connection }) => (
           <View style={[styles.connectionCard, { backgroundColor: theme.bg.card, borderColor: theme.border.default }, SHADOW.sm]}>
             <Avatar name={item.name} color={item.color} />
             <View style={styles.connectionInfo}>
@@ -179,7 +224,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sectionLabel: { ...TYPOGRAPHY.label, marginTop: SPACING.xs },
-  emptyText: { ...TYPOGRAPHY.body, textAlign: 'center', paddingVertical: SPACING.xl },
+  emptyWrap: { alignItems: 'center', paddingVertical: SPACING.xl, gap: SPACING.sm },
+  emptyText: { ...TYPOGRAPHY.body, textAlign: 'center' },
+  emptyHint: { ...TYPOGRAPHY.caption, textAlign: 'center' },
+  emptyLink: { ...TYPOGRAPHY.bodyBold },
   connectionCard: {
     flexDirection: 'row',
     alignItems: 'center',

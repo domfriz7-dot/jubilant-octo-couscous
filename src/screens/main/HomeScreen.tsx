@@ -18,6 +18,13 @@ import CalendarService, { CalendarEvent } from '../../services/CalendarService';
 
 type Nav = StackNavigationProp<RootStackParamList>;
 
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning 👋';
+  if (h < 17) return 'Good afternoon 👋';
+  return 'Good evening 👋';
+}
+
 function formatDate(date: Date): string {
   return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 }
@@ -63,7 +70,7 @@ export default function HomeScreen(): JSX.Element {
         end={{ x: 1, y: 1 }}
       >
         <View>
-          <Text style={styles.headerSub}>Good morning 👋</Text>
+          <Text style={styles.headerSub}>{getGreeting()}</Text>
           <Text style={styles.headerDate}>{formatDate(new Date())}</Text>
         </View>
         <TouchableOpacity

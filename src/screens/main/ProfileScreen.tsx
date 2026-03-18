@@ -1,9 +1,10 @@
 import React from 'react';
-import { Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 import { useAppTheme } from '../../ui/theme/ThemeProvider';
 import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../../ui/theme/tokens';
 import { getUserId } from '../../services/IdentityService';
@@ -21,8 +22,10 @@ interface SettingRow {
   destructive?: boolean;
 }
 
+const APP_VERSION = Constants.expoConfig?.version ?? '1.0.0';
+
 export default function ProfileScreen(): JSX.Element {
-  const { theme, isDark, preference, setPreference } = useAppTheme();
+  const { theme, isDark, setPreference } = useAppTheme();
   const { top, bottom } = useSafeAreaInsets();
   const userId = getUserId();
 
@@ -36,15 +39,25 @@ export default function ProfileScreen(): JSX.Element {
           text: 'Clear data',
           style: 'destructive',
           onPress: async () => {
-            await AsyncStorage.multiRemove([
-              '@uandme/events',
-              '@uandme/tasks',
-              '@uandme/xp_state',
-            ]);
-            Alert.alert('Done', 'All data cleared.');
+            try {
+              await AsyncStorage.multiRemove([
+                '@uandme/events',
+                '@uandme/tasks',
+                '@uandme/xp_state',
+              ]);
+              Alert.alert('Done', 'All data cleared.');
+            } catch {
+              Alert.alert('Error', 'Could not clear data. Please try again.');
+            }
           },
         },
       ]
+    );
+  };
+
+  const openURL = (url: string) => {
+    Linking.openURL(url).catch(() =>
+      Alert.alert('Could not open link', 'Please visit the URL in your browser.')
     );
   };
 
@@ -64,9 +77,17 @@ export default function ProfileScreen(): JSX.Element {
     {
       title: 'About',
       rows: [
-        { icon: 'information-circle-outline', label: 'Version', value: '1.0.0' },
-        { icon: 'shield-checkmark-outline', label: 'Privacy Policy' },
-        { icon: 'document-text-outline', label: 'Terms of Service' },
+        { icon: 'information-circle-outline', label: 'Version', value: APP_VERSION },
+        {
+          icon: 'shield-checkmark-outline',
+          label: 'Privacy Policy',
+          onPress: () => openURL('https://uandme.app/privacy'),
+        },
+        {
+          icon: 'document-text-outline',
+          label: 'Terms of Service',
+          onPress: () => openURL('https://uandme.app/terms'),
+        },
       ],
     },
     {
@@ -115,6 +136,8 @@ export default function ProfileScreen(): JSX.Element {
                     onPress={row.onPress}
                     disabled={row.toggle || !row.onPress}
                     activeOpacity={0.8}
+                    accessibilityLabel={row.label}
+                    accessibilityRole={row.toggle ? 'none' : 'button'}
                   >
                     <View style={[styles.iconWrap, { backgroundColor: row.destructive ? `${theme.danger}18` : theme.bg.elevated }]}>
                       <Ionicons
