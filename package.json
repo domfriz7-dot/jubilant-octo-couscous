@@ -82,7 +82,7 @@
     ],
     "moduleNameMapper": {
       "^@react-native-async-storage/async-storage$": "<rootDir>/__mocks__/@react-native-async-storage/async-storage.js",
-      "^expo-sqlite$": "<rootDir>/__mocks__/expo-sqlite.js"
+      "^expo-sqlite$": "<rootDir>/expo-sqlite-mock.js"
     }
   },
   "private": true,
