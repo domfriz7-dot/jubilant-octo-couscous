@@ -16,6 +16,7 @@ import {
   subscribeToOutgoingInvitations,
 } from '../../services/InvitationService';
 import { getConnections } from '../../services/ConnectionsService';
+import CalendarService from '../../services/CalendarService';
 import { EVENT_COLORS } from '../../ui/theme/tokens';
 import { reportError } from '../../utils/reportError';
 
@@ -153,7 +154,9 @@ export default function useInvitations(): InvitationsState {
             checkAllReady();
           });
 
-          unsubsRef.current = [u1, u2, u3];
+          const u4 = CalendarService.subscribeToSharedEvents(currentUid);
+
+          unsubsRef.current = [u1, u2, u3, u4];
         });
       } catch (e) {
         reportError('useInvitations.init', e);

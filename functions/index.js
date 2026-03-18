@@ -3,7 +3,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { initializeApp } = require('firebase-admin/app');
 const { getAuth: getAdminAuth } = require('firebase-admin/auth');
 const { getMessaging } = require('firebase-admin/messaging');
-const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { getFirestore } = require('firebase-admin/firestore');
 const functionsV1 = require('firebase-functions');
 
 initializeApp();
@@ -109,15 +109,27 @@ exports.onConnectionCreated = onDocumentCreated('connections/{connectionId}', as
   const data = event.data?.data();
   if (!data) return;
 
-  const { fromUid, toName } = data;
-  if (!fromUid) return;
+  const { fromUid, toUid, fromName, toName } = data;
 
-  await notifyUser(
-    fromUid,
-    'Invitation accepted!',
-    `${toName || 'Someone'} accepted your calendar invite`,
-    { kind: 'invite_accepted', connectionId: event.params.connectionId }
-  );
+  // Notify the inviter that their invite was accepted
+  if (fromUid) {
+    await notifyUser(
+      fromUid,
+      'Invitation accepted!',
+      `${toName || 'Someone'} accepted your calendar invite`,
+      { kind: 'invite_accepted', connectionId: event.params.connectionId }
+    );
+  }
+
+  // Notify the acceptor that the connection is now live
+  if (toUid) {
+    await notifyUser(
+      toUid,
+      "You're now connected!",
+      `You are now sharing calendars with ${fromName || 'someone'}`,
+      { kind: 'invite_accepted', connectionId: event.params.connectionId }
+    );
+  }
 });
 
 // ─── Trigger: event shared → notify recipients ────────────────────────────────
@@ -157,8 +169,8 @@ exports.onAuthUserCreated = functionsV1.auth.user().onCreate(async (user) => {
       displayName: user.displayName ?? '',
       photoURL: user.photoURL ?? null,
       fcmToken: null,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     }, { merge: true });
   } catch (err) {
     console.error(`onAuthUserCreated: failed to create profile for ${user.uid}:`, err);
