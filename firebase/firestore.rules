@@ -24,9 +24,8 @@ service cloud.firestore {
     }
 
     // ── Connections ─────────────────────────────────────────────────────────
-    // Both parties can read; either can update (e.g. future block/remove);
-    // only a Cloud Function (admin) should create — clients create via the
-    // acceptInvitation flow which goes through an atomic write.
+    // Both parties can read; either can update (e.g. future block/remove).
+    // Clients create connections as part of the acceptInvitation flow.
     match /connections/{connectionId} {
       allow read: if request.auth != null &&
         (resource.data.fromUid == request.auth.uid ||
@@ -42,23 +41,32 @@ service cloud.firestore {
 
     // ── Invitations ─────────────────────────────────────────────────────────
     // Sender can create and read their outgoing invites.
-    // Both sender and recipient (matched by toUid) can read.
-    // Either party can update status (accept / decline).
+    // Both sender and recipient can read / update.
+    // Recipients are matched by uid OR by email so that pre-registration
+    // invitations (sent before the recipient has an account) are still
+    // accessible once they sign up. request.auth.token.email is the verified
+    // email from the Firebase Auth ID token.
     // No hard deletes — keeps audit trail and prevents re-invite spam.
     match /invitations/{inviteId} {
       allow read: if request.auth != null &&
         (resource.data.fromUid == request.auth.uid ||
-         resource.data.toUid   == request.auth.uid);
+         resource.data.toUid   == request.auth.uid ||
+         resource.data.toEmail == request.auth.token.email);
       allow create: if request.auth != null &&
         request.resource.data.fromUid == request.auth.uid &&
         request.resource.data.status  == 'pending' &&
         request.resource.data.fromUid != request.resource.data.toUid;
       allow update: if request.auth != null &&
+        // Either party by uid, or recipient matched by email (pre-registration)
         (resource.data.fromUid == request.auth.uid ||
-         resource.data.toUid   == request.auth.uid) &&
-        // Only status and updatedAt fields may change after creation
+         resource.data.toUid   == request.auth.uid ||
+         resource.data.toEmail == request.auth.token.email) &&
+        // Only status, updatedAt and toUid may change after creation
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['status', 'updatedAt', 'toUid']);
+          .hasOnly(['status', 'updatedAt', 'toUid']) &&
+        // toUid may only be claimed by the current user (cannot redirect invite)
+        (request.resource.data.toUid == resource.data.toUid ||
+         request.resource.data.toUid == request.auth.uid);
       allow delete: if false;
     }
   }

@@ -15,10 +15,19 @@ async function getFcmToken(uid) {
   return snap.data()?.fcmToken ?? null;
 }
 
+/**
+ * Send an FCM push notification to a single user.
+ * Errors are caught and logged but never re-thrown — a messaging failure
+ * must never crash a Firestore trigger and cause unwanted retries.
+ */
 async function notifyUser(uid, title, body, data) {
-  const token = await getFcmToken(uid);
-  if (!token) return;
-  await getMessaging().send({ token, notification: { title, body }, data: data ?? {} });
+  try {
+    const token = await getFcmToken(uid);
+    if (!token) return;
+    await getMessaging().send({ token, notification: { title, body }, data: data ?? {} });
+  } catch (err) {
+    console.error(`notifyUser(${uid}) failed:`, err);
+  }
 }
 
 // ─── Callable: findUserByEmail ────────────────────────────────────────────────
@@ -53,7 +62,6 @@ exports.onInvitationCreated = onDocumentCreated('invitations/{inviteId}', async 
   if (!data) return;
 
   const { toEmail, toUid, fromName, fromUid } = data;
-  const db = getFirestore();
   let recipientUid = toUid;
 
   // Patch toUid if the client didn't resolve it (user existed but lookup failed)
@@ -71,7 +79,7 @@ exports.onInvitationCreated = onDocumentCreated('invitations/{inviteId}', async 
 
   await notifyUser(
     recipientUid,
-    'New calendar invite 📅',
+    'New calendar invite',
     `${fromName || fromUid} wants to share calendars with you`,
     { kind: 'invite_received', inviteId: event.params.inviteId }
   );
@@ -106,7 +114,7 @@ exports.onConnectionCreated = onDocumentCreated('connections/{connectionId}', as
 
   await notifyUser(
     fromUid,
-    'Invitation accepted! 🎉',
+    'Invitation accepted!',
     `${toName || 'Someone'} accepted your calendar invite`,
     { kind: 'invite_accepted', connectionId: event.params.connectionId }
   );
@@ -121,16 +129,20 @@ exports.onEventShared = onDocumentCreated('events/{eventId}', async (event) => {
   const { sharedWith = [], title, ownerId } = data;
   if (!sharedWith.length) return;
 
-  const db = getFirestore();
-  const tokenDocs = await Promise.all(sharedWith.map((uid) => db.doc(`users/${uid}`).get()));
-  const tokens = tokenDocs.map((d) => d.data()?.fcmToken).filter(Boolean);
-  if (!tokens.length) return;
+  try {
+    const db = getFirestore();
+    const tokenDocs = await Promise.all(sharedWith.map((uid) => db.doc(`users/${uid}`).get()));
+    const tokens = tokenDocs.map((d) => d.data()?.fcmToken).filter(Boolean);
+    if (!tokens.length) return;
 
-  await getMessaging().sendEachForMulticast({
-    tokens,
-    notification: { title: 'New shared event', body: `${ownerId} shared "${title}" with you` },
-    data: { kind: 'event_shared', eventId: event.params.eventId },
-  });
+    await getMessaging().sendEachForMulticast({
+      tokens,
+      notification: { title: 'New shared event', body: `${ownerId} shared "${title}" with you` },
+      data: { kind: 'event_shared', eventId: event.params.eventId },
+    });
+  } catch (err) {
+    console.error('onEventShared failed:', err);
+  }
 });
 
 // ─── Auth trigger: new user → create profile + resolve pending invites ────────
@@ -138,26 +150,37 @@ exports.onEventShared = onDocumentCreated('events/{eventId}', async (event) => {
 exports.onAuthUserCreated = functionsV1.auth.user().onCreate(async (user) => {
   const db = getFirestore();
 
-  // Initialise user profile
-  await db.doc(`users/${user.uid}`).set({
-    email: user.email ?? '',
-    displayName: user.displayName ?? '',
-    photoURL: user.photoURL ?? null,
-    fcmToken: null,
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
+  try {
+    // Initialise user profile
+    await db.doc(`users/${user.uid}`).set({
+      email: user.email ?? '',
+      displayName: user.displayName ?? '',
+      photoURL: user.photoURL ?? null,
+      fcmToken: null,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  } catch (err) {
+    console.error(`onAuthUserCreated: failed to create profile for ${user.uid}:`, err);
+    // Return without backfilling invitations — profile write is the priority;
+    // a retry will re-attempt profile creation.
+    return;
+  }
 
   // Backfill toUid on invitations that arrived before the user registered
   if (!user.email) return;
-  const pending = await db.collection('invitations')
-    .where('toEmail', '==', user.email.toLowerCase())
-    .where('toUid', '==', null)
-    .where('status', '==', 'pending')
-    .get();
+  try {
+    const pending = await db.collection('invitations')
+      .where('toEmail', '==', user.email.toLowerCase())
+      .where('toUid', '==', null)
+      .where('status', '==', 'pending')
+      .get();
 
-  if (pending.empty) return;
-  const batch = db.batch();
-  pending.docs.forEach((doc) => batch.update(doc.ref, { toUid: user.uid }));
-  await batch.commit();
+    if (pending.empty) return;
+    const batch = db.batch();
+    pending.docs.forEach((doc) => batch.update(doc.ref, { toUid: user.uid }));
+    await batch.commit();
+  } catch (err) {
+    console.error(`onAuthUserCreated: invitation backfill failed for ${user.email}:`, err);
+  }
 });

@@ -40,10 +40,11 @@ export default function HomeScreen(): JSX.Element {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
 
   useEffect(() => {
-    const today = todayStr();
-    setEvents(CalendarService.getEventsForDate(today));
+    setEvents(CalendarService.getEventsForDate(todayStr()));
+    // Re-evaluate todayStr() on every update so the list stays correct
+    // if the app remains open past midnight.
     const unsub = CalendarService.subscribe((all) =>
-      setEvents(all.filter((e) => e.date === today))
+      setEvents(all.filter((e) => e.date === todayStr()))
     );
     return unsub;
   }, []);

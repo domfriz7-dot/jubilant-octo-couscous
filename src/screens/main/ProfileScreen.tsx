@@ -8,6 +8,7 @@ import Constants from 'expo-constants';
 import { useAppTheme } from '../../ui/theme/ThemeProvider';
 import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../../ui/theme/tokens';
 import { getUserId } from '../../services/IdentityService';
+import { reportError } from '../../utils/reportError';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -46,7 +47,8 @@ export default function ProfileScreen(): JSX.Element {
                 '@uandme/xp_state',
               ]);
               Alert.alert('Done', 'All data cleared.');
-            } catch {
+            } catch (e) {
+              reportError('ProfileScreen.clearData', e);
               Alert.alert('Error', 'Could not clear data. Please try again.');
             }
           },

@@ -82,10 +82,11 @@ export default function AddEventScreen(): JSX.Element {
         createdBy: getUserId(),
         sharedWith,
       });
+      // Navigate first; setSaving(false) is intentionally skipped on success
+      // because the component unmounts immediately after goBack().
       nav.goBack();
     } catch (e: any) {
       setError('Failed to save event. Please try again.');
-    } finally {
       setSaving(false);
     }
   };
