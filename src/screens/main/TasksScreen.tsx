@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../ui/theme/ThemeProvider';
 import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../../ui/theme/tokens';
+import { reportError } from '../../utils/reportError';
 
 const TASKS_KEY = '@uandme/tasks';
 
@@ -30,12 +31,12 @@ function useTasks() {
   React.useEffect(() => {
     AsyncStorage.getItem(TASKS_KEY)
       .then((v) => { if (v) setTasks(JSON.parse(v)); })
-      .catch(() => {});
+      .catch((e) => reportError('TasksScreen.load', e));
   }, []);
 
   const save = useCallback((next: Task[]) => {
     setTasks(next);
-    AsyncStorage.setItem(TASKS_KEY, JSON.stringify(next)).catch(() => {});
+    AsyncStorage.setItem(TASKS_KEY, JSON.stringify(next)).catch((e) => reportError('TasksScreen.save', e));
   }, []);
 
   const add = useCallback((text: string) => {

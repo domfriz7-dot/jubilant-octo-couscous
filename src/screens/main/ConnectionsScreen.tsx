@@ -177,9 +177,9 @@ export default function ConnectionsScreen(): JSX.Element {
   // ─── Accept / decline ────────────────────────────────────────────────────────
 
   const handleAccept = async (inv: FirestoreInvitation) => {
-    if (!uid) return;
+    if (!uid || busyInvitationId !== null) return;
     setBusyInvitationId(inv.id);
-    const err = await acceptInvitation(inv.id, inv, uid, displayName ?? email ?? '');
+    const err = await acceptInvitation(inv.id, inv, uid, displayName ?? email ?? 'User');
     setBusyInvitationId(null);
     if (err) Alert.alert('Error', err);
   };
@@ -194,6 +194,7 @@ export default function ConnectionsScreen(): JSX.Element {
           text: 'Decline',
           style: 'destructive',
           onPress: async () => {
+            if (busyInvitationId !== null) return;
             setBusyInvitationId(inv.id);
             const err = await declineInvitation(inv.id);
             setBusyInvitationId(null);

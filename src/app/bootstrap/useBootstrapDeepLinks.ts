@@ -27,9 +27,9 @@ function handleUrl(url: string, nav: NavRef): void {
 export default function useBootstrapDeepLinks(navRef: NavRef): void {
   useEffect(() => {
     // Handle link that opened the app from cold start
-    Linking.getInitialURL().then((url) => {
-      if (url) handleUrl(url, navRef);
-    });
+    Linking.getInitialURL()
+      .then((url) => { if (url) handleUrl(url, navRef); })
+      .catch((e) => reportError('useBootstrapDeepLinks.getInitialURL', e));
 
     const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url, navRef));
     return () => sub.remove();
