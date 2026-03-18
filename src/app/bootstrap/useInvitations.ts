@@ -125,26 +125,32 @@ export default function useInvitations(): InvitationsState {
           setDisplayName(firebaseUser.displayName);
           setLoading(true);
 
-          // Track which of the three streams have delivered their first batch
-          let pendingFirst = 3;
-          const markFirst = () => {
-            pendingFirst -= 1;
-            if (pendingFirst === 0) setLoading(false);
+          // Each stream fires its first snapshot independently. Track per-stream
+          // readiness with boolean flags so repeated snapshots on one stream
+          // cannot prematurely clear the loading state before others resolve.
+          let connReady = false;
+          let incReady = false;
+          let outReady = false;
+          const checkAllReady = () => {
+            if (connReady && incReady && outReady) setLoading(false);
           };
 
           const u1 = subscribeToConnections(currentUid, (conns) => {
             setConnections(conns.map((c) => toDisplayConnection(c, currentUid)));
-            markFirst();
+            connReady = true;
+            checkAllReady();
           });
 
           const u2 = subscribeToIncomingInvitations(currentUid, currentEmail, (invs) => {
             setIncomingInvitations(invs);
-            markFirst();
+            incReady = true;
+            checkAllReady();
           });
 
           const u3 = subscribeToOutgoingInvitations(currentUid, (invs) => {
             setOutgoingInvitations(invs);
-            markFirst();
+            outReady = true;
+            checkAllReady();
           });
 
           unsubsRef.current = [u1, u2, u3];

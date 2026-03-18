@@ -29,7 +29,9 @@ const migrations: Migration[] = [
       // v1 → v2: ensure every event has a sharedWith array
       const raw = await AsyncStorage.getItem('@uandme/events');
       if (!raw) return;
-      const events = JSON.parse(raw) as any[];
+      const parsed: unknown = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return;
+      const events = parsed as Record<string, unknown>[];
       const updated = events.map((e) => ({ sharedWith: [], ...e }));
       await AsyncStorage.setItem('@uandme/events', JSON.stringify(updated));
     },

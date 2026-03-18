@@ -2,7 +2,11 @@ import { useEffect, MutableRefObject } from 'react';
 import { Linking } from 'react-native';
 import { reportError } from '../../utils/reportError';
 
-type NavRef = MutableRefObject<any>;
+/** Minimal navigator shape required for deep-link routing. */
+interface NavShape {
+  navigate?: (...args: unknown[]) => void;
+}
+type NavRef = MutableRefObject<NavShape | null>;
 
 function handleUrl(url: string, nav: NavRef): void {
   try {

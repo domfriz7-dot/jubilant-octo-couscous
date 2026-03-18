@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { ComponentProps } from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+
+type IoniconsName = ComponentProps<typeof Ionicons>['name'];
 import { useAppTheme } from '../ui/theme/ThemeProvider';
 import { TYPOGRAPHY } from '../ui/theme/tokens';
 
@@ -47,7 +49,7 @@ function MainTabs(): JSX.Element {
           marginBottom: 2,
         },
         tabBarIcon: ({ color, size, focused }) => {
-          const icons: Record<string, [string, string]> = {
+          const icons: Record<string, [IoniconsName, IoniconsName]> = {
             Home: ['home', 'home-outline'],
             CalendarTab: ['calendar', 'calendar-outline'],
             Tasks: ['checkmark-circle', 'checkmark-circle-outline'],
@@ -57,7 +59,7 @@ function MainTabs(): JSX.Element {
           const [filled, outline] = icons[route.name] ?? ['ellipse', 'ellipse-outline'];
           return (
             <Ionicons
-              name={(focused ? filled : outline) as any}
+              name={focused ? filled : outline}
               size={size}
               color={color}
             />

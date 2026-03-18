@@ -153,7 +153,7 @@ export default function ConnectionsScreen(): JSX.Element {
       return;
     }
 
-    if (!firebaseEnabled || !authenticated) {
+    if (!firebaseEnabled || !authenticated || !uid) {
       Alert.alert(
         'Sign in required',
         'Please sign in to send invitations to real users.',
@@ -163,7 +163,7 @@ export default function ConnectionsScreen(): JSX.Element {
     }
 
     setInviting(true);
-    const err = await sendInvitation(uid!, email ?? '', displayName ?? email ?? '', toEmail);
+    const err = await sendInvitation(uid, email ?? '', displayName ?? email ?? '', toEmail);
     setInviting(false);
 
     if (err) {
@@ -177,8 +177,9 @@ export default function ConnectionsScreen(): JSX.Element {
   // ─── Accept / decline ────────────────────────────────────────────────────────
 
   const handleAccept = async (inv: FirestoreInvitation) => {
+    if (!uid) return;
     setBusyInvitationId(inv.id);
-    const err = await acceptInvitation(inv.id, inv, uid!, displayName ?? email ?? '');
+    const err = await acceptInvitation(inv.id, inv, uid, displayName ?? email ?? '');
     setBusyInvitationId(null);
     if (err) Alert.alert('Error', err);
   };
