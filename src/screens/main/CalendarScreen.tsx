@@ -6,10 +6,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
-import { RootStackParamList } from '../navigation/RootNavigator';
-import { useAppTheme } from '../ui/theme/ThemeProvider';
-import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../ui/theme/tokens';
-import CalendarService, { CalendarEvent } from '../services/CalendarService';
+import { RootStackParamList } from '../../navigation/RootNavigator';
+import { useAppTheme } from '../../ui/theme/ThemeProvider';
+import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../../ui/theme/tokens';
+import CalendarService, { CalendarEvent } from '../../services/CalendarService';
 
 type Nav = StackNavigationProp<RootStackParamList>;
 

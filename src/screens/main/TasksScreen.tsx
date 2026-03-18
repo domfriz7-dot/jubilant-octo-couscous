@@ -12,8 +12,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppTheme } from '../ui/theme/ThemeProvider';
-import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../ui/theme/tokens';
+import { useAppTheme } from '../../ui/theme/ThemeProvider';
+import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../../ui/theme/tokens';
 
 const TASKS_KEY = '@uandme/tasks';
 

@@ -10,8 +10,8 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppTheme } from '../ui/theme/ThemeProvider';
-import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE, EVENT_COLORS } from '../ui/theme/tokens';
+import { useAppTheme } from '../../ui/theme/ThemeProvider';
+import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE, EVENT_COLORS } from '../../ui/theme/tokens';
 
 interface Connection {
   id: string;

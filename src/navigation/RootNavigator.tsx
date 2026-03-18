@@ -5,14 +5,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../ui/theme/ThemeProvider';
 import { TYPOGRAPHY } from '../ui/theme/tokens';
 
-import HomeScreen from '../screens/HomeScreen';
-import CalendarScreen from '../screens/CalendarScreen';
-import TasksScreen from '../screens/TasksScreen';
-import ConnectionsScreen from '../screens/ConnectionsScreen';
-import ProfileScreen from '../screens/ProfileScreen';
-import EventDetailsScreen from '../screens/EventDetailsScreen';
-import AddEventScreen from '../screens/AddEventScreen';
-import WeeklyReportScreen from '../screens/WeeklyReportScreen';
+import HomeScreen from '../screens/main/HomeScreen';
+import CalendarScreen from '../screens/main/CalendarScreen';
+import TasksScreen from '../screens/main/TasksScreen';
+import ConnectionsScreen from '../screens/main/ConnectionsScreen';
+import ProfileScreen from '../screens/main/ProfileScreen';
+import EventDetailsScreen from '../screens/stack/EventDetailsScreen';
+import AddEventScreen from '../screens/stack/AddEventScreen';
+import WeeklyReportScreen from '../screens/stack/WeeklyReportScreen';
 
 // ─── Tab Navigator ────────────────────────────────────────────────────────────
 

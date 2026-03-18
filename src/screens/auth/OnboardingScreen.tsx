@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { PALETTE, SPACING, TYPOGRAPHY, RADIUS } from '../ui/theme/tokens';
+import { PALETTE, SPACING, TYPOGRAPHY, RADIUS } from '../../ui/theme/tokens';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 

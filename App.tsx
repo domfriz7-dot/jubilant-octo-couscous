@@ -14,11 +14,11 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import XPNotification from './src/components/XPNotification';
 import LevelUpModal from './src/components/LevelUpModal';
-import OnboardingScreen from './src/screens/OnboardingScreen';
+import OnboardingScreen from './src/screens/auth/OnboardingScreen';
 import RootNavigator from './src/navigation/RootNavigator';
 import AuthNavigator from './src/navigation/AuthNavigator';
 import { ThemeProvider, useAppTheme } from './src/ui/theme/ThemeProvider';
-import ErrorBoundary from './src/ui/theme/ErrorBoundary';
+import ErrorBoundary from './src/components/ErrorBoundary';
 
 import useBootstrapTelemetry from './src/app/bootstrap/useBootstrapTelemetry';
 import useOnboardingGate from './src/app/bootstrap/useOnboardingGate';
@@ -28,7 +28,7 @@ import useBootstrapAutopilot from './src/app/bootstrap/useBootstrapAutopilot';
 import useBootstrapCalendarSync from './src/app/bootstrap/useBootstrapCalendarSync';
 import useBootstrapBackend from './src/app/bootstrap/useBootstrapBackend';
 import { useNetworkStatus } from './src/hooks/useNetworkStatus';
-import OfflineBanner from './src/ui/components/OfflineBanner';
+import OfflineBanner from './src/components/OfflineBanner';
 import useBootstrapRuntimeSafety from './src/app/bootstrap/useBootstrapRuntimeSafety';
 import useBootstrapSubscriptions from './src/app/bootstrap/useBootstrapSubscriptions';
 import useBootstrapAuth from './src/app/bootstrap/useBootstrapAuth';

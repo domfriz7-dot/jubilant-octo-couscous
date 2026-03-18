@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   ScrollView,
   StyleSheet,
@@ -8,48 +7,43 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { AuthStackParamList } from '../navigation/AuthNavigator';
-import { useAppTheme } from '../ui/theme/ThemeProvider';
-import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../ui/theme/tokens';
-import { reportError } from '../utils/reportError';
+import { AuthStackParamList } from '../../navigation/AuthNavigator';
+import { useAppTheme } from '../../ui/theme/ThemeProvider';
+import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../../ui/theme/tokens';
+import { reportError } from '../../utils/reportError';
 
-type Nav = StackNavigationProp<AuthStackParamList, 'Register'>;
+type Nav = StackNavigationProp<AuthStackParamList, 'Login'>;
 
-export default function RegisterScreen(): JSX.Element {
+export default function LoginScreen(): JSX.Element {
   const { theme } = useAppTheme();
   const { top, bottom } = useSafeAreaInsets();
   const nav = useNavigation<Nav>();
 
-  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleRegister = async () => {
-    if (!name.trim() || !email.trim() || !password) {
-      setError('Please fill in all fields.');
-      return;
-    }
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters.');
+  const handleLogin = async () => {
+    if (!email.trim() || !password) {
+      setError('Please enter your email and password.');
       return;
     }
     setError('');
     setLoading(true);
     try {
-      const { getAuth, createUserWithEmailAndPassword, updateProfile } = await import('firebase/auth');
-      const auth = getAuth();
-      const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
-      await updateProfile(cred.user, { displayName: name.trim() });
+      const { getAuth, signInWithEmailAndPassword } = await import('firebase/auth');
+      await signInWithEmailAndPassword(getAuth(), email.trim(), password);
+      // Auth state change in useBootstrapAuth will handle navigation
     } catch (e: any) {
-      setError(e?.message ?? 'Registration failed. Please try again.');
-      reportError('RegisterScreen', e);
+      setError(e?.message ?? 'Sign in failed. Please try again.');
+      reportError('LoginScreen', e);
     } finally {
       setLoading(false);
     }
@@ -65,34 +59,27 @@ export default function RegisterScreen(): JSX.Element {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {/* Header */}
         <LinearGradient
           colors={theme.gradient.primary}
           style={styles.headerGradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         >
-          <Text style={styles.logoEmoji}>✨</Text>
-          <Text style={styles.appName}>Create account</Text>
-          <Text style={styles.tagline}>Join U&Me and share your world</Text>
+          <Text style={styles.logoEmoji}>💑</Text>
+          <Text style={styles.appName}>U&Me</Text>
+          <Text style={styles.tagline}>Stay in sync with the people you love</Text>
         </LinearGradient>
 
+        {/* Form card */}
         <View style={[styles.card, { backgroundColor: theme.bg.card, borderColor: theme.border.default }, SHADOW.md]}>
+          <Text style={[styles.cardTitle, { color: theme.text.primary }]}>Sign in</Text>
+
           {error ? (
             <View style={[styles.errorBox, { backgroundColor: `${theme.danger}18`, borderColor: theme.danger }]}>
               <Text style={[styles.errorText, { color: theme.text.danger }]}>{error}</Text>
             </View>
           ) : null}
-
-          <Text style={[styles.label, { color: theme.text.secondary }]}>Your name</Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text.primary }]}
-            value={name}
-            onChangeText={setName}
-            placeholder="Alex"
-            placeholderTextColor={theme.text.tertiary}
-            autoCapitalize="words"
-            returnKeyType="next"
-          />
 
           <Text style={[styles.label, { color: theme.text.secondary }]}>Email</Text>
           <TextInput
@@ -112,30 +99,34 @@ export default function RegisterScreen(): JSX.Element {
             style={[styles.input, { backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text.primary }]}
             value={password}
             onChangeText={setPassword}
-            placeholder="Min. 8 characters"
+            placeholder="••••••••"
             placeholderTextColor={theme.text.tertiary}
             secureTextEntry
             returnKeyType="done"
-            onSubmitEditing={handleRegister}
+            onSubmitEditing={handleLogin}
           />
 
           <TouchableOpacity
             style={[styles.primaryButton, { backgroundColor: theme.primary }, loading && styles.buttonDisabled]}
-            onPress={handleRegister}
+            onPress={handleLogin}
             activeOpacity={0.8}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator color={PALETTE.white} />
             ) : (
-              <Text style={styles.primaryButtonText}>Create account</Text>
+              <Text style={styles.primaryButtonText}>Sign in</Text>
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => nav.goBack()} style={styles.switchRow}>
+          <TouchableOpacity
+            onPress={() => nav.navigate('Register')}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.switchRow}
+          >
             <Text style={[styles.switchText, { color: theme.text.secondary }]}>
-              Already have an account?{' '}
-              <Text style={{ color: theme.text.accent }}>Sign in</Text>
+              Don't have an account?{' '}
+              <Text style={{ color: theme.text.accent }}>Sign up</Text>
             </Text>
           </TouchableOpacity>
         </View>
@@ -154,7 +145,7 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   logoEmoji: { fontSize: 52 },
-  appName: { ...TYPOGRAPHY.heading, color: PALETTE.white },
+  appName: { ...TYPOGRAPHY.hero, color: PALETTE.white },
   tagline: { ...TYPOGRAPHY.body, color: 'rgba(255,255,255,0.8)', textAlign: 'center' },
   card: {
     borderRadius: RADIUS.xl,
@@ -162,7 +153,12 @@ const styles = StyleSheet.create({
     padding: SPACING.xl,
     gap: SPACING.md,
   },
-  errorBox: { borderRadius: RADIUS.md, borderWidth: 1, padding: SPACING.md },
+  cardTitle: { ...TYPOGRAPHY.heading, marginBottom: SPACING.xs },
+  errorBox: {
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    padding: SPACING.md,
+  },
   errorText: { ...TYPOGRAPHY.caption },
   label: { ...TYPOGRAPHY.captionBold, marginBottom: -SPACING.xs },
   input: {

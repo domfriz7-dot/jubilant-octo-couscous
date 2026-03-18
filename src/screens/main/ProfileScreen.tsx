@@ -4,9 +4,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAppTheme } from '../ui/theme/ThemeProvider';
-import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../ui/theme/tokens';
-import { getUserId } from '../services/IdentityService';
+import { useAppTheme } from '../../ui/theme/ThemeProvider';
+import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../../ui/theme/tokens';
+import { getUserId } from '../../services/IdentityService';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
