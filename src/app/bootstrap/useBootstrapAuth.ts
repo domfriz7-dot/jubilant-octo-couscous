@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { reportError } from '../../utils/reportError';
+import { ensureUserProfile } from '../../services/InvitationService';
 
 interface AuthUser {
   uid: string;
@@ -33,7 +34,7 @@ export default function useBootstrapAuth(): BootstrapAuthResult {
         const auth = getAuth();
         unsub = onAuthStateChanged(
           auth,
-          (firebaseUser) => {
+          async (firebaseUser) => {
             if (firebaseUser) {
               setUser({
                 uid: firebaseUser.uid,
@@ -41,6 +42,14 @@ export default function useBootstrapAuth(): BootstrapAuthResult {
                 displayName: firebaseUser.displayName,
                 photoURL: firebaseUser.photoURL,
               });
+
+              // Upsert /users/{uid} so other users can look this person up by
+              // UID (invitation resolution, push-token storage). Fire-and-forget.
+              ensureUserProfile(
+                firebaseUser.uid,
+                firebaseUser.email,
+                firebaseUser.displayName
+              ).catch((e) => reportError('useBootstrapAuth.ensureProfile', e));
             } else {
               setUser(null);
             }

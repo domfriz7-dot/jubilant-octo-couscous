@@ -118,7 +118,9 @@ function AppShell(): JSX.Element {
         case 'task_reminder':
           nav.navigate('MainTabs', { screen: 'Tasks' });
           break;
+        case 'invite_received':
         case 'invite_accepted':
+        case 'invite_declined':
           nav.navigate('MainTabs', { screen: 'Connections' });
           break;
         case 'nudge':

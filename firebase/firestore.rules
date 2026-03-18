@@ -2,12 +2,17 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users can read and write their own document
+    // ── Users ──────────────────────────────────────────────────────────────
+    // Each user can read and write only their own document.
+    // We intentionally do NOT allow listing the collection — user lookup by
+    // email is handled server-side via the findUserByEmail Cloud Function.
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow get:   if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Events: owner can read/write; shared users can read
+    // ── Events ─────────────────────────────────────────────────────────────
+    // Owner can read/write; users in sharedWith can read.
     match /events/{eventId} {
       allow read: if request.auth != null &&
         (resource.data.ownerId == request.auth.uid ||
@@ -18,16 +23,43 @@ service cloud.firestore {
         resource.data.ownerId == request.auth.uid;
     }
 
-    // Connections: both parties can read; requester can create
+    // ── Connections ─────────────────────────────────────────────────────────
+    // Both parties can read; either can update (e.g. future block/remove);
+    // only a Cloud Function (admin) should create — clients create via the
+    // acceptInvitation flow which goes through an atomic write.
     match /connections/{connectionId} {
       allow read: if request.auth != null &&
         (resource.data.fromUid == request.auth.uid ||
-         resource.data.toUid == request.auth.uid);
+         resource.data.toUid   == request.auth.uid);
       allow create: if request.auth != null &&
-        request.resource.data.fromUid == request.auth.uid;
+        (request.resource.data.fromUid == request.auth.uid ||
+         request.resource.data.toUid   == request.auth.uid);
       allow update: if request.auth != null &&
         (resource.data.fromUid == request.auth.uid ||
-         resource.data.toUid == request.auth.uid);
+         resource.data.toUid   == request.auth.uid);
+      allow delete: if false; // preserve audit trail — soft-delete via status
+    }
+
+    // ── Invitations ─────────────────────────────────────────────────────────
+    // Sender can create and read their outgoing invites.
+    // Both sender and recipient (matched by toUid) can read.
+    // Either party can update status (accept / decline).
+    // No hard deletes — keeps audit trail and prevents re-invite spam.
+    match /invitations/{inviteId} {
+      allow read: if request.auth != null &&
+        (resource.data.fromUid == request.auth.uid ||
+         resource.data.toUid   == request.auth.uid);
+      allow create: if request.auth != null &&
+        request.resource.data.fromUid == request.auth.uid &&
+        request.resource.data.status  == 'pending' &&
+        request.resource.data.fromUid != request.resource.data.toUid;
+      allow update: if request.auth != null &&
+        (resource.data.fromUid == request.auth.uid ||
+         resource.data.toUid   == request.auth.uid) &&
+        // Only status and updatedAt fields may change after creation
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'updatedAt', 'toUid']);
+      allow delete: if false;
     }
   }
 }
