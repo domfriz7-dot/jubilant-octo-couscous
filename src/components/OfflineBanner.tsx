@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { PALETTE, SPACING, TYPOGRAPHY } from '../theme/tokens';
+import { PALETTE, SPACING, TYPOGRAPHY } from '../ui/theme/tokens';
 
 interface Props {
   visible: boolean;

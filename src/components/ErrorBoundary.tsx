@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { PALETTE, SPACING, TYPOGRAPHY, RADIUS } from './tokens';
+import { PALETTE, SPACING, TYPOGRAPHY, RADIUS } from '../ui/theme/tokens';
 
 interface State {
   hasError: boolean;
