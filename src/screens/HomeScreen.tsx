@@ -149,7 +149,7 @@ export default function HomeScreen(): JSX.Element {
       />
 
       {/* FAB */}
-      <TouchableOpacity style={styles.fab} onPress={openAdd} activeOpacity={0.85}>
+      <TouchableOpacity style={styles.fab} onPress={openAdd} activeOpacity={0.8}>
         <LinearGradient colors={theme.gradient.primary} style={styles.fabGradient}>
           <Ionicons name="add" size={28} color={PALETTE.white} />
         </LinearGradient>

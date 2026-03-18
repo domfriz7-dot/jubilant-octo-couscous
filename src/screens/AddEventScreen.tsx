@@ -229,7 +229,7 @@ export default function AddEventScreen(): JSX.Element {
               <TouchableOpacity
                 style={styles.shareRow}
                 onPress={() => toggleShare(u.id)}
-                activeOpacity={0.75}
+                activeOpacity={0.8}
               >
                 <Text style={[styles.shareUserName, { color: theme.text.primary }]}>{u.name}</Text>
                 <View style={[

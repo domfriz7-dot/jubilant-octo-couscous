@@ -97,7 +97,7 @@ export default function SharedScreen(): JSX.Element {
                 key={e.id}
                 style={[styles.sharedEvent, { borderTopColor: theme.border.subtle }]}
                 onPress={() => nav.navigate('EventDetails', { eventId: e.id })}
-                activeOpacity={0.75}
+                activeOpacity={0.8}
               >
                 <View style={[styles.eventDot, { backgroundColor: e.color }]} />
                 <View style={{ flex: 1 }}>

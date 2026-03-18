@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Calendar, DateData } from 'react-native-calendars';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -50,17 +51,22 @@ export default function CalendarScreen(): JSX.Element {
   return (
     <View style={[styles.root, { backgroundColor: theme.bg.default }]}>
       {/* Screen header */}
-      <View style={[styles.screenHeader, { paddingTop: top + SPACING.md }]}>
-        <Text style={[styles.screenTitle, { color: theme.text.primary }]}>Calendar</Text>
+      <LinearGradient
+        colors={theme.gradient.primary}
+        style={[styles.screenHeader, { paddingTop: top + SPACING.lg }]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <Text style={styles.screenTitle}>Calendar</Text>
         <TouchableOpacity
           onPress={() => nav.navigate('AddEvent', { selectedDate })}
-          style={[styles.addBtn, { backgroundColor: theme.primary }]}
+          style={styles.addBtn}
           accessibilityLabel="Add event"
           accessibilityRole="button"
         >
-          <Ionicons name="add" size={20} color={PALETTE.white} />
+          <Ionicons name="add" size={26} color={PALETTE.white} />
         </TouchableOpacity>
-      </View>
+      </LinearGradient>
 
       <FlatList
         data={dayEvents}
@@ -139,9 +145,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.screen,
-    paddingBottom: SPACING.md,
+    paddingBottom: SPACING.lg,
   },
-  screenTitle: { ...TYPOGRAPHY.heading },
+  screenTitle: { ...TYPOGRAPHY.heading, color: PALETTE.white },
   addBtn: {
     width: 36,
     height: 36,

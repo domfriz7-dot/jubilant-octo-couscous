@@ -8,6 +8,7 @@ import {
   View,
   Alert,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -80,12 +81,17 @@ export default function TasksScreen(): JSX.Element {
 
   return (
     <View style={[styles.root, { backgroundColor: theme.bg.default }]}>
-      <View style={[styles.header, { paddingTop: top + SPACING.md }]}>
-        <Text style={[styles.title, { color: theme.text.primary }]}>Tasks</Text>
-        <Text style={[styles.subtitle, { color: theme.text.secondary }]}>
+      <LinearGradient
+        colors={theme.gradient.primary}
+        style={[styles.header, { paddingTop: top + SPACING.lg }]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <Text style={styles.title}>Tasks</Text>
+        <Text style={styles.subtitle}>
           {pending.length} remaining
         </Text>
-      </View>
+      </LinearGradient>
 
       {/* Input */}
       <View style={[styles.inputRow, { backgroundColor: theme.bg.card, borderColor: theme.border.default }]}>
@@ -152,9 +158,9 @@ export default function TasksScreen(): JSX.Element {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { paddingHorizontal: SPACING.screen, paddingBottom: SPACING.md },
-  title: { ...TYPOGRAPHY.heading },
-  subtitle: { ...TYPOGRAPHY.caption, marginTop: 2 },
+  header: { paddingHorizontal: SPACING.screen, paddingBottom: SPACING.lg },
+  title: { ...TYPOGRAPHY.heading, color: PALETTE.white },
+  subtitle: { ...TYPOGRAPHY.caption, marginTop: 2, color: 'rgba(255,255,255,0.75)' },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',

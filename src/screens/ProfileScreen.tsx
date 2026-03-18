@@ -114,7 +114,7 @@ export default function ProfileScreen(): JSX.Element {
                     style={styles.row}
                     onPress={row.onPress}
                     disabled={row.toggle || !row.onPress}
-                    activeOpacity={0.7}
+                    activeOpacity={0.8}
                   >
                     <View style={[styles.iconWrap, { backgroundColor: row.destructive ? `${theme.danger}18` : theme.bg.elevated }]}>
                       <Ionicons

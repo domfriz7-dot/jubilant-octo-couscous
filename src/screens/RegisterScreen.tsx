@@ -120,9 +120,9 @@ export default function RegisterScreen(): JSX.Element {
           />
 
           <TouchableOpacity
-            style={[styles.primaryButton, loading && styles.buttonDisabled]}
+            style={[styles.primaryButton, { backgroundColor: theme.primary }, loading && styles.buttonDisabled]}
             onPress={handleRegister}
-            activeOpacity={0.85}
+            activeOpacity={0.8}
             disabled={loading}
           >
             {loading ? (
@@ -173,7 +173,6 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.body,
   },
   primaryButton: {
-    backgroundColor: PALETTE.indigo600,
     borderRadius: RADIUS.full,
     paddingVertical: SPACING.lg,
     alignItems: 'center',

@@ -131,7 +131,7 @@ export default function OnboardingScreen({ onComplete }: Props): JSX.Element {
 
       {/* CTA */}
       <View style={[styles.footer, { paddingBottom: bottom + SPACING.xl }]}>
-        <TouchableOpacity style={styles.button} onPress={goNext} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.button} onPress={goNext} activeOpacity={0.8}>
           <Text style={styles.buttonText}>
             {isLast ? "Let's go!" : 'Next'}
           </Text>

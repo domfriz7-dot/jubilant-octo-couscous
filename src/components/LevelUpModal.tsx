@@ -63,7 +63,7 @@ export default function LevelUpModal({ visible, levelData, onClose }: Props): JS
             <Text style={styles.subtitle}>
               You're getting better at staying connected.
             </Text>
-            <TouchableOpacity style={styles.button} onPress={handleClose} activeOpacity={0.85}>
+            <TouchableOpacity style={styles.button} onPress={handleClose} activeOpacity={0.8}>
               <Text style={styles.buttonText}>Keep going 🚀</Text>
             </TouchableOpacity>
           </LinearGradient>
