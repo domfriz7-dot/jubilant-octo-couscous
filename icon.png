@@ -1,0 +1,180 @@
+/**
+ * XPService tests
+ *
+ * Tests the core XP engine: awarding, level-up detection, daily caps,
+ * and the level info resolver that screens use.
+ *
+ * These catch:
+ *   - Level up threshold regressions (change LEVELS → breaks level up)
+ *   - Daily cap bypass (change MAX_DAILY_TASK_XP → users farm infinite XP)
+ *   - getLevelInfo returning wrong icon/title for a given XP amount
+ */
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// We need to import after mocking
+let XPService, LEVELS, XP_REWARDS;
+
+beforeEach(() => {
+  AsyncStorage.__resetStore();
+  // Re-require to get fresh singleton
+  jest.resetModules();
+  const mod = require('../src/services/XPService');
+  XPService = mod.default;
+  LEVELS = mod.LEVELS;
+  XP_REWARDS = mod.XP_REWARDS;
+});
+
+describe('XPService', () => {
+  describe('awardXP', () => {
+    it('increases totalXP by the awarded amount', async () => {
+      const result = await XPService.awardXP(50, 'Test award');
+      expect(result.newXP).toBe(50);
+      expect(result.xpGained).toBe(50);
+    });
+
+    it('accumulates across multiple awards', async () => {
+      await XPService.awardXP(30, 'First');
+      const result = await XPService.awardXP(70, 'Second');
+      expect(result.newXP).toBe(100);
+    });
+
+    it('records award in history', async () => {
+      await XPService.awardXP(10, 'History test');
+      const data = await XPService.getXPData();
+      expect(data.history[0]).toMatchObject({ amount: 10, reason: 'History test' });
+      expect(data.history[0].timestamp).toBeDefined();
+    });
+
+    it('caps history at 50 entries', async () => {
+      for (let i = 0; i < 55; i++) {
+        await XPService.awardXP(1, `Entry ${i}`);
+      }
+      const data = await XPService.getXPData();
+      expect(data.history.length).toBe(50);
+    });
+  });
+
+  describe('level up detection', () => {
+    it('starts at level 1', async () => {
+      const data = await XPService.getXPData();
+      expect(data.currentLevel).toBe(1);
+    });
+
+    it('levels up to 2 at 100 XP', async () => {
+      const result = await XPService.awardXP(100, 'Level 2');
+      expect(result.leveledUp).toBe(true);
+      expect(result.newLevel).toBe(2);
+      expect(result.levelData.title).toBe('Getting Comfortable');
+    });
+
+    it('does NOT level up at 99 XP', async () => {
+      const result = await XPService.awardXP(99, 'Not quite');
+      expect(result.leveledUp).toBe(false);
+    });
+
+    it('can skip multiple levels with a big award', async () => {
+      const result = await XPService.awardXP(500, 'Big jump');
+      expect(result.leveledUp).toBe(true);
+      expect(result.newLevel).toBeGreaterThanOrEqual(4); // 450 = level 4
+    });
+
+    it('reaches max level', async () => {
+      const maxXP = LEVELS[LEVELS.length - 1].xpRequired;
+      const result = await XPService.awardXP(maxXP, 'Max it out');
+      expect(result.leveledUp).toBe(true);
+      expect(result.newLevel).toBe(LEVELS.length);
+    });
+  });
+
+  describe('completeTask — daily XP cap', () => {
+    it('awards XP for first task', async () => {
+      const result = await XPService.completeTask();
+      expect(result.xpGained).toBe(XP_REWARDS.TASK_COMPLETE);
+    });
+
+    it('caps at MAX_DAILY_TASK_XP tasks per day', async () => {
+      // Complete MAX_DAILY_TASK_XP tasks — all should award XP
+      for (let i = 0; i < XP_REWARDS.MAX_DAILY_TASK_XP; i++) {
+        const r = await XPService.completeTask();
+        expect(r.xpGained).toBeGreaterThan(0);
+      }
+      // One more — should be capped
+      const capped = await XPService.completeTask();
+      expect(capped.xpGained).toBe(0);
+      expect(capped.message).toContain('Daily XP limit');
+    });
+
+    it('still counts the task in stats even when capped', async () => {
+      for (let i = 0; i <= XP_REWARDS.MAX_DAILY_TASK_XP; i++) {
+        await XPService.completeTask();
+      }
+      const data = await XPService.getXPData();
+      expect(data.stats.tasksCompleted).toBe(XP_REWARDS.MAX_DAILY_TASK_XP + 1);
+    });
+  });
+
+  describe('createEvent', () => {
+    it('awards base XP for solo event', async () => {
+      const result = await XPService.createEvent(0);
+      expect(result.xpGained).toBe(XP_REWARDS.EVENT_CREATE);
+    });
+
+    it('awards bonus XP for shared event', async () => {
+      const result = await XPService.createEvent(1);
+      expect(result.xpGained).toBe(XP_REWARDS.EVENT_CREATE + XP_REWARDS.EVENT_SHARE);
+    });
+
+    it('awards group bonus for 3+ people', async () => {
+      const result = await XPService.createEvent(4);
+      expect(result.xpGained).toBe(XP_REWARDS.EVENT_WITH_MULTIPLE);
+    });
+  });
+
+  describe('getLevelInfo', () => {
+    it('returns level 1 data for 0 XP', () => {
+      const info = XPService.getLevelInfo(0);
+      expect(info.level).toBe(1);
+      expect(info.title).toBe('Just Starting Out');
+      expect(info.icon).toBe('🌱');
+    });
+
+    it('returns correct level for mid-range XP', () => {
+      const info = XPService.getLevelInfo(1500);
+      expect(info.level).toBe(7); // 1400 = level 7
+      expect(info.title).toBe('Warming Up');
+    });
+
+    it('returns progress between 0 and 1', () => {
+      const info = XPService.getLevelInfo(50); // halfway to level 2 (100 XP)
+      expect(info.progress).toBeGreaterThan(0);
+      expect(info.progress).toBeLessThan(1);
+    });
+
+    it('returns 100% progress at max level', () => {
+      const maxXP = LEVELS[LEVELS.length - 1].xpRequired;
+      const info = XPService.getLevelInfo(maxXP);
+      expect(info.progress).toBe(1);
+      expect(info.isMaxLevel).toBe(true);
+    });
+  });
+
+  describe('pub/sub', () => {
+    it('notifies listeners on XP change', async () => {
+      const spy = jest.fn();
+      XPService.subscribe(spy);
+      await XPService.awardXP(10, 'Trigger notify');
+      // awardXP calls saveXPData which calls loadXPData (also saves) + saveXPData → multiple notifies
+      expect(spy).toHaveBeenCalled();
+    });
+
+    it('unsubscribe removes listener', async () => {
+      const spy = jest.fn();
+      const unsub = XPService.subscribe(spy);
+      unsub();
+      spy.mockClear();
+      await XPService.awardXP(10, 'Should not trigger');
+      expect(spy).not.toHaveBeenCalled();
+    });
+  });
+});

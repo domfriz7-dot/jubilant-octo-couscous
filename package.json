@@ -1,104 +1,163 @@
-{
-  "name": "uandme",
-  "version": "1.0.0",
-  "main": "node_modules/expo/AppEntry.js",
-  "scripts": {
-    "start": "npx expo start",
-    "android": "npx expo start --android",
-    "ios": "npx expo start --ios",
-    "web": "npx expo start --web",
-    "test": "jest --verbose",
-    "test:watch": "jest --watch",
-    "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
-    "typecheck": "tsc --project tsconfig.strict.json --noEmit",
-    "typecheck:loose": "tsc --noEmit",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "prepare": "husky"
-  },
-  "dependencies": {
-    "expo": "~54.0.0",
-    "react": "19.1.0",
-    "react-native": "0.81.5",
-    "expo-build-properties": "~1.0.10",
-    "expo-calendar": "~15.0.8",
-    "expo-clipboard": "~8.0.8",
-    "expo-constants": "~18.0.9",
-    "expo-document-picker": "~14.0.8",
-    "expo-file-system": "~19.0.15",
-    "expo-haptics": "~15.0.7",
-    "expo-image-picker": "~17.0.10",
-    "expo-linear-gradient": "~15.0.8",
-    "expo-location": "~19.0.8",
-    "expo-notifications": "~0.32.16",
-    "expo-sharing": "~14.0.8",
-    "expo-sqlite": "~16.0.10",
-    "expo-status-bar": "~3.0.9",
-    "expo-updates": "~29.0.12",
-    "@react-navigation/native": "^7.1.17",
-    "@react-navigation/stack": "^7.4.8",
-    "@react-navigation/bottom-tabs": "^7.4.7",
-    "react-native-gesture-handler": "~2.28.0",
-    "react-native-reanimated": "~4.1.1",
-    "react-native-worklets": "~0.5.1",
-    "react-native-safe-area-context": "~5.6.0",
-    "react-native-screens": "~4.16.0",
-    "@expo/vector-icons": "^15.0.3",
-    "@react-native-async-storage/async-storage": "~2.2.0",
-    "@sentry/react-native": "~7.2.0",
-    "firebase": "^11.0.0",
-    "react-native-calendars": "^1.1306.0",
-    "react-native-purchases": "^8.7.0",
-    "react-native-svg": "~15.12.1",
-    "react-native-view-shot": "~4.0.0",
-    "@segment/analytics-react-native": "^2.21.4",
-    "zod": "^3.24.1",
-    "@segment/sovran-react-native": "*",
-    "@shopify/flash-list": "~2.0.2",
-    "@react-native-community/netinfo": "^11.4.1",
-    "expo-crypto": "~14.0.2"
-  },
-  "devDependencies": {
-    "@babel/core": "^7.25.0",
-    "@types/jest": "^29.5.14",
-    "@types/node": "^22.13.0",
-    "@types/react": "~19.1.10",
-    "babel-preset-expo": "~54.0.10",
-    "eslint": "^9.9.0",
-    "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-import": "^2.30.0",
-    "eslint-plugin-react": "^7.35.2",
-    "eslint-plugin-react-hooks": "^5.1.0",
-    "husky": "^9.1.6",
-    "jest-expo": "~54.0.0",
-    "lint-staged": "^15.2.10",
-    "prettier": "^3.3.3",
-    "typescript": "~5.9.3"
-  },
-  "jest": {
-    "preset": "jest-expo",
-    "transformIgnorePatterns": [
-      "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg)"
-    ],
-    "moduleNameMapper": {
-      "^@react-native-async-storage/async-storage$": "<rootDir>/__mocks__/@react-native-async-storage/async-storage.js",
-      "^expo-sqlite$": "<rootDir>/expo-sqlite-mock.js"
+/*
+ * Firebase Cloud Functions (callable)
+ *
+ * IMPORTANT:
+ * - Store secrets in Functions config / environment, NOT in the client.
+ *   - ANTHROPIC_API_KEY
+ *   - GOOGLE_PLACES_API_KEY
+ */
+
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { logger } = require('firebase-functions');
+
+function requireEnv(name) {
+  const v = process.env[name];
+  if (!v) throw new HttpsError('failed-precondition', `Missing env var: ${name}`);
+  return v;
+}
+
+async function fetchJson(url, opts = {}, timeoutMs = 25000) {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...opts, signal: controller.signal });
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
     }
-  },
-  "private": true,
-  "lint-staged": {
-    "*.{js,jsx,ts,tsx,json,md}": [
-      "prettier --write"
-    ],
-    "*.{js,jsx,ts,tsx}": [
-      "eslint --fix"
-    ]
-  },
-  "overrides": {
-    "glob": "^10.4.5",
-    "rimraf": "^6.0.1",
-    "@babel/plugin-proposal-class-properties": "npm:@babel/plugin-transform-class-properties@^7.25.9",
-    "@babel/plugin-proposal-nullish-coalescing-operator": "npm:@babel/plugin-transform-nullish-coalescing-operator@^7.25.9",
-    "@babel/plugin-proposal-optional-chaining": "npm:@babel/plugin-transform-optional-chaining@^7.25.9"
+    return JSON.parse(text);
+  } finally {
+    clearTimeout(t);
   }
 }
+
+exports.aiGeneratePlan = onCall({ cors: true }, async (req) => {
+  try {
+    const prompt = String(req.data?.prompt || '').trim();
+    if (!prompt) throw new HttpsError('invalid-argument', 'prompt is required');
+
+    const apiKey = requireEnv('ANTHROPIC_API_KEY');
+    const url = 'https://api.anthropic.com/v1/messages';
+
+    const body = {
+      model: 'claude-3-sonnet-20240229',
+      max_tokens: 900,
+      temperature: 0.7,
+      messages: [{ role: 'user', content: prompt }],
+    };
+
+    const data = await fetchJson(
+      url,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify(body),
+      },
+      30000
+    );
+
+    const text = data?.content?.[0]?.text;
+    if (typeof text !== 'string' || !text.trim()) {
+      throw new Error('Empty AI response');
+    }
+
+    return { text };
+  } catch (e) {
+    logger.error('aiGeneratePlan failed', e);
+    if (e instanceof HttpsError) throw e;
+    throw new HttpsError('internal', 'AI request failed');
+  }
+});
+
+exports.placesSearchNearby = onCall({ cors: true }, async (req) => {
+  try {
+    const key = requireEnv('GOOGLE_PLACES_API_KEY');
+    const lat = Number(req.data?.lat);
+    const lng = Number(req.data?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      throw new HttpsError('invalid-argument', 'lat/lng are required');
+    }
+
+    const category = String(req.data?.category || 'restaurant');
+    const radiusM = Math.max(100, Math.min(Number(req.data?.radiusM || 5000), 50000));
+    const maxResults = Math.max(1, Math.min(Number(req.data?.maxResults || 5), 20));
+    const minRating = Math.max(0, Math.min(Number(req.data?.minRating || 3.5), 5));
+    const vibe = typeof req.data?.vibe === 'string' ? req.data.vibe.trim() : '';
+
+    // Basic mapping compatible with the client mapping.
+    const mapping = {
+      restaurant: { type: 'restaurant', keyword: '' },
+      cafe: { type: 'cafe', keyword: '' },
+      bar: { type: 'bar', keyword: '' },
+      park: { type: 'park', keyword: '' },
+      museum: { type: 'museum', keyword: '' },
+      bowling: { type: 'bowling_alley', keyword: '' },
+      spa: { type: 'spa', keyword: '' },
+      cinema: { type: 'movie_theater', keyword: '' },
+      bakery: { type: 'bakery', keyword: '' },
+      gallery: { type: 'art_gallery', keyword: '' },
+      amusement: { type: 'amusement_park', keyword: '' },
+      aquarium: { type: 'aquarium', keyword: '' },
+      zoo: { type: 'zoo', keyword: '' },
+      nightclub: { type: 'night_club', keyword: '' },
+      romantic: { type: 'restaurant', keyword: 'romantic dinner' },
+      dessert: { type: 'bakery', keyword: 'dessert' },
+      cocktail: { type: 'bar', keyword: 'cocktail lounge' },
+      brunch: { type: 'restaurant', keyword: 'brunch' },
+      icecream: { type: 'food', keyword: 'ice cream gelato' },
+      livemusic: { type: 'night_club', keyword: 'live music' },
+      boardgame: { type: 'cafe', keyword: 'board game' },
+      escape: { type: 'tourist_attraction', keyword: 'escape room' },
+      minigolf: { type: 'tourist_attraction', keyword: 'mini golf' },
+      karaoke: { type: 'night_club', keyword: 'karaoke' },
+      markets: { type: 'shopping_mall', keyword: 'night market' },
+      scenic: { type: 'park', keyword: 'scenic lookout viewpoint' },
+    };
+
+    const m = mapping[category] || mapping.restaurant;
+    const params = new URLSearchParams({
+      location: `${lat},${lng}`,
+      radius: String(radiusM),
+      type: m.type,
+      key,
+    });
+    const kw = [m.keyword, vibe].filter(Boolean).join(' ').trim();
+    if (kw) params.set('keyword', kw);
+
+    const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?${params}`;
+    const data = await fetchJson(url, {}, 15000);
+
+    if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+      throw new Error(String(data.status || 'UNKNOWN'));
+    }
+
+    const results = (data.results || [])
+      .filter((p) => (p.rating || 0) >= minRating)
+      .slice(0, maxResults)
+      .map((p) => ({
+        placeId: p.place_id,
+        name: p.name,
+        vicinity: p.vicinity || '',
+        rating: p.rating || 0,
+        userRatingsTotal: p.user_ratings_total || 0,
+        priceLevel: p.price_level ?? null,
+        lat: typeof p.geometry?.location?.lat === 'number' ? p.geometry.location.lat : null,
+        lng: typeof p.geometry?.location?.lng === 'number' ? p.geometry.location.lng : null,
+        openNow: p.opening_hours?.open_now ?? null,
+        photoRef: p.photos?.[0]?.photo_reference || null,
+        photoUrl: null,
+        directionsUrl: null,
+        category,
+      }));
+
+    return { results };
+  } catch (e) {
+    logger.error('placesSearchNearby failed', e);
+    if (e instanceof HttpsError) throw e;
+    throw new HttpsError('internal', 'Places request failed');
+  }
+});

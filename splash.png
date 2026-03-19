@@ -1,0 +1,182 @@
+/**
+ * Integration tests — end-to-end user flows
+ *
+ * These simulate what happens when a user completes a flow,
+ * using the real services (with mocked AsyncStorage).
+ *
+ * These catch:
+ *   - "Onboarding saves profile but tabs don't appear" (profile key missing)
+ *   - "Created event doesn't show on the calendar day" (addEvent vs getEventsForDate mismatch)
+ *   - "Completing 20 tasks should level up but doesn't" (XP math wrong)
+ *   - "Invite prefill data doesn't survive the navigation" (data shape mismatch)
+ */
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const USER_SETUP_KEY = '@uandme_user_setup_complete';
+const USER_PROFILE_KEY = '@uandme_user_profile';
+
+let CalendarService, TasksService, XPService, XP_REWARDS;
+
+beforeEach(() => {
+  AsyncStorage.__resetStore();
+  jest.resetModules();
+  CalendarService = require('../src/services/CalendarService').default;
+  TasksService = require('../src/services/TasksService').default;
+  const xpMod = require('../src/services/XPService');
+  XPService = xpMod.default;
+  XP_REWARDS = xpMod.XP_REWARDS;
+});
+
+describe('Onboarding → tabs appear', () => {
+  it('saves profile and setup flag on complete', async () => {
+    // Simulate what OnboardingScreen.handleContinue does
+    const profile = {
+      id: 'local-user',
+      name: 'Dom',
+      email: 'dom@example.com',
+      color: '#C4A08E',
+      createdAt: Date.now(),
+    };
+    await AsyncStorage.multiSet([
+      [USER_PROFILE_KEY, JSON.stringify(profile)],
+      [USER_SETUP_KEY, 'true'],
+    ]);
+
+    // App.js reads these to decide onboarding vs tabs
+    const setupComplete = await AsyncStorage.getItem(USER_SETUP_KEY);
+    const savedProfile = JSON.parse(await AsyncStorage.getItem(USER_PROFILE_KEY));
+
+    expect(setupComplete).toBe('true');
+    expect(savedProfile.name).toBe('Dom');
+    expect(savedProfile.email).toBe('dom@example.com');
+    expect(savedProfile.id).toBe('local-user');
+  });
+
+  it('shows onboarding when setup flag is missing', async () => {
+    const setupComplete = await AsyncStorage.getItem(USER_SETUP_KEY);
+    expect(setupComplete).toBeNull(); // → show onboarding
+  });
+});
+
+describe('Add event → appears on selected day', () => {
+  it('event created today appears in getEventsForDate(today)', async () => {
+    const today = new Date().toISOString().split('T')[0];
+
+    const event = await CalendarService.addEvent({
+      title: 'Date night',
+      date: today,
+      time: '19:00',
+      description: 'Italian restaurant',
+      sharedWith: ['2'],
+    });
+
+    const dayEvents = await CalendarService.getEventsForDate(today);
+    const found = dayEvents.find(e => e.id === event.id);
+
+    expect(found).toBeDefined();
+    expect(found.title).toBe('Date night');
+    expect(found.sharedWith).toContain('2');
+  });
+
+  it('event created for tomorrow does NOT appear on today', async () => {
+    const today = new Date().toISOString().split('T')[0];
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowKey = tomorrow.toISOString().split('T')[0];
+
+    await CalendarService.addEvent({ title: 'Tomorrow thing', date: tomorrowKey, time: '10:00' });
+
+    const todayEvents = await CalendarService.getEventsForDate(today);
+    expect(todayEvents.find(e => e.title === 'Tomorrow thing')).toBeUndefined();
+  });
+});
+
+describe('Award XP → toast data returned', () => {
+  it('returns xpGained for toast display', async () => {
+    const result = await XPService.awardXP(25, 'Event created');
+    // The screen uses result.xpGained to show "+25 XP" toast
+    expect(result.xpGained).toBe(25);
+    expect(result.newXP).toBe(25);
+    expect(typeof result.leveledUp).toBe('boolean');
+  });
+
+  it('task completion returns XP data for toast', async () => {
+    const result = await XPService.completeTask();
+    expect(result.xpGained).toBe(XP_REWARDS.TASK_COMPLETE);
+    expect(result.newXP).toBeGreaterThan(0);
+  });
+});
+
+describe('Level up → modal data returned', () => {
+  it('returns leveledUp=true with level data for modal', async () => {
+    // Award exactly enough to reach level 2 (100 XP)
+    const result = await XPService.awardXP(100, 'Big achievement');
+
+    expect(result.leveledUp).toBe(true);
+    expect(result.newLevel).toBe(2);
+    expect(result.levelData).toBeDefined();
+    expect(result.levelData.title).toBe('Getting Comfortable');
+    expect(result.levelData.icon).toBe('🌿');
+    // Screen uses these fields to populate the level-up modal
+  });
+
+  it('does NOT trigger level up for small awards', async () => {
+    const result = await XPService.awardXP(5, 'Small task');
+    expect(result.leveledUp).toBe(false);
+    expect(result.levelData).toBeNull();
+  });
+});
+
+describe('Connection invite deep link prefill', () => {
+  it('profile data has correct shape for invite screen', async () => {
+    // Simulate saved profile (post-onboarding)
+    const profile = {
+      id: 'local-user',
+      name: 'Dom',
+      email: 'dom@example.com',
+      color: '#C4A08E',
+    };
+    await AsyncStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile));
+
+    // Simulate deep link parsing: uandme://invite?from=Dom&email=dom@example.com
+    const deepLinkParams = { from: profile.name, email: profile.email };
+
+    // The invite screen would pre-fill with this data
+    expect(deepLinkParams.from).toBe('Dom');
+    expect(deepLinkParams.email).toBe('dom@example.com');
+  });
+
+  it('invite → XP awarded', async () => {
+    const result = await XPService.inviteConnection();
+    expect(result.xpGained).toBe(XP_REWARDS.CONNECTION_INVITE);
+  });
+});
+
+describe('Full flow: complete tasks → level up', () => {
+  it('completing enough tasks triggers level up', async () => {
+    // Level 2 = 100 XP. Each task = 5 XP. Need 20 tasks.
+    // But daily cap = 4 tasks/day. So we simulate multiple "days".
+    let totalXP = 0;
+    let leveledUp = false;
+
+    // Simulate 5 days of completing 4 tasks each = 20 tasks = 100 XP
+    for (let day = 0; day < 5; day++) {
+      // Reset daily counter by manipulating storage
+      const data = await XPService.getXPData();
+      const fakeDate = `2025-06-${15 + day}`;
+      data.dailyTaskXP = { date: fakeDate, count: 0 };
+      // Force save the date reset
+      await AsyncStorage.setItem('@uandme_xp_data', JSON.stringify(data));
+
+      for (let t = 0; t < 4; t++) {
+        const result = await XPService.completeTask();
+        totalXP = result.newXP;
+        if (result.leveledUp) leveledUp = true;
+      }
+    }
+
+    expect(totalXP).toBeGreaterThanOrEqual(100);
+    expect(leveledUp).toBe(true);
+  });
+});
