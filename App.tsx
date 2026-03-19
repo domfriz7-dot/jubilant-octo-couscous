@@ -21,6 +21,7 @@ import { ThemeProvider, useAppTheme } from './src/ui/theme/ThemeProvider';
 import ErrorBoundary from './src/components/ErrorBoundary';
 
 import { XPProvider } from './src/app/context/XPContext';
+import { ConnectionsProvider } from './src/app/context/ConnectionsContext';
 import useBootstrapTelemetry from './src/app/bootstrap/useBootstrapTelemetry';
 import useOnboardingGate from './src/app/bootstrap/useOnboardingGate';
 import useBootstrapXP from './src/app/bootstrap/useBootstrapXP';
@@ -195,6 +196,7 @@ function AppShell(): JSX.Element {
         <StatusBar style={isDark ? 'light' : 'dark'} />
         <View style={[styles.container, { backgroundColor: theme.bg.default }]}>
           <XPProvider value={awardXP}>
+          <ConnectionsProvider>
           <NavigationContainer
             ref={navigationRef}
             onReady={() => {
@@ -218,6 +220,7 @@ function AppShell(): JSX.Element {
           >
             {authEnabled && !user ? <AuthNavigator /> : <RootNavigator />}
           </NavigationContainer>
+          </ConnectionsProvider>
           </XPProvider>
 
           <XPNotification visible={xpToast.visible} xp={xpToast.xp} reason={xpToast.reason} onHide={hideXPToast} />

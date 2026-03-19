@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Alert, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,7 +7,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { useAppTheme } from '../../ui/theme/ThemeProvider';
 import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../../ui/theme/tokens';
-import { getUserId } from '../../services/IdentityService';
 import { reportError } from '../../utils/reportError';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -24,16 +23,52 @@ interface SettingRow {
 }
 
 const APP_VERSION = Constants.expoConfig?.version ?? '1.0.0';
+const FIREBASE_ENABLED = Boolean(process.env.EXPO_PUBLIC_FIREBASE_API_KEY);
+
+interface AuthProfile {
+  displayName: string | null;
+  email: string | null;
+  uid: string | null;
+}
+
+function useAuthProfile(): AuthProfile {
+  const [profile, setProfile] = useState<AuthProfile>({ displayName: null, email: null, uid: null });
+
+  useEffect(() => {
+    if (!FIREBASE_ENABLED) return;
+    let unsub: (() => void) | undefined;
+    (async () => {
+      try {
+        const { getAuth, onAuthStateChanged } = await import('firebase/auth');
+        unsub = onAuthStateChanged(getAuth(), (user) => {
+          setProfile(user
+            ? { displayName: user.displayName, email: user.email, uid: user.uid }
+            : { displayName: null, email: null, uid: null }
+          );
+        });
+      } catch (e) {
+        reportError('ProfileScreen.auth', e);
+      }
+    })();
+    return () => unsub?.();
+  }, []);
+
+  return profile;
+}
 
 export default function ProfileScreen(): JSX.Element {
   const { theme, isDark, setPreference } = useAppTheme();
   const { top, bottom } = useSafeAreaInsets();
-  const userId = getUserId();
+  const { displayName, email, uid } = useAuthProfile();
+
+  // Derive what to show in the header
+  const headerName = displayName || email?.split('@')[0] || 'You';
+  const headerSub = email ?? uid ?? '';
 
   const handleClearData = () => {
     Alert.alert(
       'Clear all data?',
-      'This will permanently delete all your events and tasks. This cannot be undone.',
+      'This will permanently delete all your local events, tasks, and XP. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -41,11 +76,29 @@ export default function ProfileScreen(): JSX.Element {
           style: 'destructive',
           onPress: async () => {
             try {
+              // Remove local cache
               await AsyncStorage.multiRemove([
                 '@uandme/events',
                 '@uandme/tasks',
                 '@uandme/xp_state',
               ]);
+
+              // Delete Firestore tasks when authenticated
+              if (FIREBASE_ENABLED && uid) {
+                try {
+                  const { getFirestore, collection, getDocs, writeBatch } = await import('firebase/firestore');
+                  const db = getFirestore();
+                  const snap = await getDocs(collection(db, 'users', uid, 'tasks'));
+                  if (!snap.empty) {
+                    const batch = writeBatch(db);
+                    snap.docs.forEach((d) => batch.delete(d.ref));
+                    await batch.commit();
+                  }
+                } catch (e) {
+                  reportError('ProfileScreen.clearFirestoreTasks', e);
+                }
+              }
+
               Alert.alert('Done', 'All data cleared.');
             } catch (e) {
               reportError('ProfileScreen.clearData', e);
@@ -117,10 +170,14 @@ export default function ProfileScreen(): JSX.Element {
           style={[styles.headerGradient, { paddingTop: top + SPACING.xl }]}
         >
           <View style={styles.avatarCircle}>
-            <Text style={styles.avatarEmoji}>🧑</Text>
+            <Text style={styles.avatarLetter}>
+              {headerName.charAt(0).toUpperCase()}
+            </Text>
           </View>
-          <Text style={styles.userName}>You</Text>
-          <Text style={styles.userId} numberOfLines={1}>{userId}</Text>
+          <Text style={styles.userName} numberOfLines={1}>{headerName}</Text>
+          {headerSub ? (
+            <Text style={styles.userSub} numberOfLines={1}>{headerSub}</Text>
+          ) : null}
         </LinearGradient>
 
         {/* Settings sections */}
@@ -179,20 +236,21 @@ const styles = StyleSheet.create({
   headerGradient: {
     alignItems: 'center',
     paddingBottom: SPACING.xxxl,
+    paddingHorizontal: SPACING.screen,
     gap: SPACING.sm,
   },
   avatarCircle: {
     width: 80,
     height: 80,
     borderRadius: RADIUS.full,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: SPACING.sm,
   },
-  avatarEmoji: { fontSize: 40 },
+  avatarLetter: { fontSize: 36, fontWeight: '700', color: PALETTE.white },
   userName: { ...TYPOGRAPHY.heading, color: PALETTE.white },
-  userId: { ...TYPOGRAPHY.label, color: 'rgba(255,255,255,0.6)', maxWidth: 200 },
+  userSub: { ...TYPOGRAPHY.caption, color: 'rgba(255,255,255,0.7)', maxWidth: 260 },
   section: { paddingHorizontal: SPACING.screen, marginTop: SPACING.xl },
   sectionTitle: { ...TYPOGRAPHY.label, marginBottom: SPACING.sm },
   sectionCard: { borderRadius: RADIUS.xl, borderWidth: 1, overflow: 'hidden' },

@@ -14,7 +14,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../ui/theme/ThemeProvider';
 import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../../ui/theme/tokens';
-import useInvitations, { DisplayConnection } from '../../app/bootstrap/useInvitations';
+import { DisplayConnection } from '../../app/bootstrap/useInvitations';
+import { useConnectionsContext } from '../../app/context/ConnectionsContext';
 import { FirestoreInvitation, sendInvitation, acceptInvitation, declineInvitation } from '../../services/InvitationService';
 import { useAwardXP } from '../../app/context/XPContext';
 
@@ -129,7 +130,7 @@ export default function ConnectionsScreen(): JSX.Element {
     uid,
     email,
     displayName,
-  } = useInvitations();
+  } = useConnectionsContext();
 
   const awardXP = useAwardXP();
   const [search, setSearch] = useState('');

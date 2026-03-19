@@ -62,13 +62,15 @@ function toDisplayConnection(conn: FirestoreConnection, myUid: string): DisplayC
 }
 
 function demoConnections(): DisplayConnection[] {
-  return getConnections().map((c) => ({
-    id: c.id,
-    name: c.name,
-    email: c.email,
-    color: c.color,
-    status: 'active' as const,
-  }));
+  return getConnections()
+    .filter((c) => c.status === 'active')
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      email: c.email,
+      color: c.color,
+      status: 'active' as const,
+    }));
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
