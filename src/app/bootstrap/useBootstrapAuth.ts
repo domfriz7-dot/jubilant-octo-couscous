@@ -66,6 +66,9 @@ export default function useBootstrapAuth(): BootstrapAuthResult {
             } else {
               setAuthUid(null);
               setUser(null);
+              // Clear the token refresh callback so it doesn't fire for the
+              // previous user's profile after they sign out.
+              NotificationService.onTokenRefresh(() => {});
             }
             setReady(true);
           },

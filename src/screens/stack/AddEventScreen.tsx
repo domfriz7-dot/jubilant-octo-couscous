@@ -120,7 +120,7 @@ export default function AddEventScreen(): JSX.Element {
           color,
           sharedWith,
         });
-        await awardXP(5, 'Updated an event');
+        awardXP(5, 'Updated an event').catch(() => {});
       } else {
         await CalendarService.addEvent({
           title: title.trim(),
@@ -133,7 +133,7 @@ export default function AddEventScreen(): JSX.Element {
           createdBy: getUserId(),
           sharedWith,
         });
-        await awardXP(10, 'Created an event');
+        awardXP(10, 'Created an event').catch(() => {});
       }
       nav.goBack();
     } catch (e: any) {

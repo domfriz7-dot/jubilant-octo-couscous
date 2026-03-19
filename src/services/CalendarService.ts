@@ -120,12 +120,12 @@ const CalendarService = {
     if (updated && isFirebaseConfigured()) {
       try {
         const { getFirestore, doc, setDoc } = await import('firebase/firestore');
-        // Use setDoc with merge so the document is created if it didn't exist yet
-        // (e.g. an event created before Firebase was configured).
+        // Use setDoc with merge:true so fields added by Cloud Functions (e.g.
+        // sharedWith entries added by onConnectionCreated) are not wiped out.
         await setDoc(doc(getFirestore(), 'events', id), {
           ...updated,
           ownerId: updated.createdBy,
-        }, { merge: false });
+        }, { merge: true });
       } catch (e) {
         reportError('CalendarService.updateEvent.firestore', e);
       }
