@@ -84,11 +84,15 @@ export default function PaywallScreen(): JSX.Element {
 
   const handleConfirmShare = async () => {
     if (!selectedConnection) return;
+    // Capture locally — shareWith is async and selectedConnection may change.
+    const conn = selectedConnection;
     await shareWith({
-      uid: selectedConnection.partnerUid,
-      name: selectedConnection.name,
-      email: selectedConnection.email,
+      uid: conn.partnerUid,
+      name: conn.name,
+      email: conn.email,
     });
+    // Only close on success; if shareWith throws, the alert inside PremiumShareContext
+    // will surface the error and the picker stays open so the user can retry.
     setShowSharePicker(false);
   };
 
@@ -287,11 +291,14 @@ export default function PaywallScreen(): JSX.Element {
 
             <TouchableOpacity
               onPress={() => setShowSharePicker(false)}
+              disabled={shareLoading}
               hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
               accessibilityLabel="Skip for now"
               accessibilityRole="button"
             >
-              <Text style={[styles.skipText, { color: theme.text.tertiary }]}>Skip for now</Text>
+              <Text style={[styles.skipText, { color: shareLoading ? theme.text.tertiary + '60' : theme.text.tertiary }]}>
+                Skip for now
+              </Text>
             </TouchableOpacity>
           </View>
         </View>

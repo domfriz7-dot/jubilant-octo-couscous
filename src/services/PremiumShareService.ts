@@ -86,19 +86,23 @@ export function subscribeToOutgoingShare(
     cb(null);
     return () => {};
   }
+  let alive = true;
   let unsub = () => {};
   (async () => {
     try {
       const { getFirestore, doc, onSnapshot } = await import('firebase/firestore');
+      // If the component unmounted before the dynamic import resolved, bail out
+      // so we never attach a listener that can never be cleaned up.
+      if (!alive) return;
       unsub = onSnapshot(doc(getFirestore(), COLLECTION, grantorUid), (snap) => {
-        cb(snap.exists() ? (snap.data() as PremiumShareRecord) : null);
+        if (alive) cb(snap.exists() ? (snap.data() as PremiumShareRecord) : null);
       });
     } catch (e) {
       reportError('PremiumShareService.subscribeToOutgoingShare', e);
-      cb(null);
+      if (alive) cb(null);
     }
   })();
-  return () => unsub();
+  return () => { alive = false; unsub(); };
 }
 
 /**
@@ -113,22 +117,24 @@ export function subscribeToIncomingShare(
     cb(null);
     return () => {};
   }
+  let alive = true;
   let unsub = () => {};
   (async () => {
     try {
       const { getFirestore, collection, query, where, limit, onSnapshot } = await import('firebase/firestore');
+      if (!alive) return;
       const q = query(
         collection(getFirestore(), COLLECTION),
         where('granteeUid', '==', granteeUid),
         limit(1)
       );
       unsub = onSnapshot(q, (snap) => {
-        cb(snap.empty ? null : (snap.docs[0].data() as PremiumShareRecord));
+        if (alive) cb(snap.empty ? null : (snap.docs[0].data() as PremiumShareRecord));
       });
     } catch (e) {
       reportError('PremiumShareService.subscribeToIncomingShare', e);
-      cb(null);
+      if (alive) cb(null);
     }
   })();
-  return () => unsub();
+  return () => { alive = false; unsub(); };
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -21,6 +21,7 @@ import { useConnectionsContext } from '../../app/context/ConnectionsContext';
 import { FirestoreInvitation, sendInvitation, acceptInvitation, declineInvitation } from '../../services/InvitationService';
 import { useAwardXP } from '../../app/context/XPContext';
 import { useSubscription } from '../../app/context/SubscriptionContext';
+import { usePremiumShare } from '../../app/context/PremiumShareContext';
 import { RootStackParamList } from '../../navigation/RootNavigator';
 
 type RootNav = StackNavigationProp<RootStackParamList>;
@@ -141,10 +142,15 @@ export default function ConnectionsScreen(): JSX.Element {
 
   const awardXP = useAwardXP();
   const { isPremium } = useSubscription();
+  const { isSharedWithMe } = usePremiumShare();
+  const hasPlus = isPremium || isSharedWithMe;
   const [search, setSearch] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviting, setInviting] = useState(false);
   const [busyInvitationId, setBusyInvitationId] = useState<string | null>(null);
+  // Ref-based guard prevents a race condition where two rapid taps could both
+  // pass the busyInvitationId !== null check before the first setState lands.
+  const busyRef = useRef(false);
 
   const filteredConnections = connections.filter(
     (c) =>
@@ -164,8 +170,8 @@ export default function ConnectionsScreen(): JSX.Element {
       return;
     }
 
-    // Free users are limited to 1 active connection.
-    if (!isPremium && connections.length >= 1) {
+    // Free users are limited to 1 active connection. Shared premium also unlocks this.
+    if (!hasPlus && connections.length >= 1) {
       nav.navigate('Paywall', { source: 'connections_limit' });
       return;
     }
@@ -195,9 +201,11 @@ export default function ConnectionsScreen(): JSX.Element {
   // ─── Accept / decline ────────────────────────────────────────────────────────
 
   const handleAccept = async (inv: FirestoreInvitation) => {
-    if (!uid || busyInvitationId !== null) return;
+    if (!uid || busyRef.current) return;
+    busyRef.current = true;
     setBusyInvitationId(inv.id);
     const err = await acceptInvitation(inv.id, inv, uid, displayName ?? email ?? 'User');
+    busyRef.current = false;
     setBusyInvitationId(null);
     if (err) {
       Alert.alert('Error', err);
@@ -216,9 +224,11 @@ export default function ConnectionsScreen(): JSX.Element {
           text: 'Decline',
           style: 'destructive',
           onPress: async () => {
-            if (busyInvitationId !== null) return;
+            if (busyRef.current) return;
+            busyRef.current = true;
             setBusyInvitationId(inv.id);
             const err = await declineInvitation(inv.id);
+            busyRef.current = false;
             setBusyInvitationId(null);
             if (err) Alert.alert('Error', err);
           },

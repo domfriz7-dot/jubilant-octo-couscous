@@ -146,9 +146,12 @@ export default function ProfileScreen(): JSX.Element {
   };
 
   const handleManageSharing = () => {
-    if (outgoingShare) {
+    // Capture a stable snapshot so Alert callbacks don't read a potentially
+    // stale closure if outgoingShare changes while the Alert is open.
+    const share = outgoingShare;
+    if (share) {
       Alert.alert(
-        `Sharing with ${outgoingShare.granteeName}`,
+        `Sharing with ${share.granteeName}`,
         'What would you like to do?',
         [
           {
@@ -164,7 +167,7 @@ export default function ProfileScreen(): JSX.Element {
             onPress: () => {
               Alert.alert(
                 'Revoke Plus access?',
-                `${outgoingShare.granteeName} will lose access to premium features.`,
+                `${share.granteeName} will lose access to premium features.`,
                 [
                   { text: 'Cancel', style: 'cancel' },
                   { text: 'Revoke', style: 'destructive', onPress: revokeShare },
@@ -205,7 +208,7 @@ export default function ProfileScreen(): JSX.Element {
           icon: 'bar-chart-outline',
           label: 'Weekly Report',
           onPress: () => {
-            if (isPremium) {
+            if (isPremium || isSharedWithMe) {
               nav.navigate('WeeklyReport');
             } else {
               nav.navigate('Paywall', { source: 'weekly_report' });
