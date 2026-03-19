@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.full,
     paddingVertical: 2,
     paddingHorizontal: SPACING.sm,
-    gap: 4,
+    gap: SPACING.xs,
   },
   star: { fontSize: 12 },
   xpText: { ...TYPOGRAPHY.captionBold, color: PALETTE.white },

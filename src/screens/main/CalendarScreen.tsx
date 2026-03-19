@@ -156,8 +156,8 @@ const styles = StyleSheet.create({
   },
   screenTitle: { ...TYPOGRAPHY.heading, color: PALETTE.white },
   addBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     borderRadius: RADIUS.full,
     alignItems: 'center',
     justifyContent: 'center',

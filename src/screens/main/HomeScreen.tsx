@@ -190,8 +190,8 @@ const styles = StyleSheet.create({
   headerSub: { ...TYPOGRAPHY.caption, color: 'rgba(255,255,255,0.75)' },
   headerDate: { ...TYPOGRAPHY.subheading, color: PALETTE.white },
   addBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: RADIUS.full,
     backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',

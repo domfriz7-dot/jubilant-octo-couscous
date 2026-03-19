@@ -137,7 +137,12 @@ export default function OnboardingScreen({ onComplete }: Props): JSX.Element {
           </Text>
         </TouchableOpacity>
         {!isLast && (
-          <TouchableOpacity onPress={onComplete} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <TouchableOpacity
+            onPress={onComplete}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Skip onboarding"
+            accessibilityRole="button"
+          >
             <Text style={styles.skip}>Skip</Text>
           </TouchableOpacity>
         )}

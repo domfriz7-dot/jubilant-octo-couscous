@@ -231,6 +231,7 @@ export default function TasksScreen(): JSX.Element {
         <TouchableOpacity
           onPress={handleAdd}
           style={[styles.addBtn, { backgroundColor: theme.primary, opacity: input.trim() ? 1 : 0.4 }]}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           disabled={!input.trim()}
           accessibilityLabel="Add task"
           accessibilityRole="button"
@@ -298,8 +299,8 @@ const styles = StyleSheet.create({
   },
   input: { flex: 1, ...TYPOGRAPHY.body },
   addBtn: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
     borderRadius: RADIUS.full,
     alignItems: 'center',
     justifyContent: 'center',
