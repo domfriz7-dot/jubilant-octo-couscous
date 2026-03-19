@@ -29,7 +29,12 @@ export default function OfflineBanner({ visible, onRetry }: Props): JSX.Element 
       pointerEvents={visible ? 'auto' : 'none'}
     >
       <Text style={styles.text}>No internet connection</Text>
-      <TouchableOpacity onPress={onRetry} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+      <TouchableOpacity
+        onPress={onRetry}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        accessibilityLabel="Retry network connection"
+        accessibilityRole="button"
+      >
         <Text style={styles.retry}>Retry</Text>
       </TouchableOpacity>
     </Animated.View>

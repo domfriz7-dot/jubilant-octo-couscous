@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Keyboard,
   KeyboardAvoidingView,
   ScrollView,
   StyleSheet,
@@ -35,6 +36,7 @@ export default function LoginScreen(): JSX.Element {
       setError('Please enter your email and password.');
       return;
     }
+    Keyboard.dismiss();
     setError('');
     setLoading(true);
     try {

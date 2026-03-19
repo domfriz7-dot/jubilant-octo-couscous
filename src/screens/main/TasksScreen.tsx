@@ -72,14 +72,14 @@ function useTasks() {
       try {
         const { getFirestore, collection, query, orderBy, onSnapshot } = await import('firebase/firestore');
         if (!alive) return;
-        firestoreActive.current = true;
 
         unsub = onSnapshot(
           query(collection(getFirestore(), 'users', uid, 'tasks'), orderBy('createdAt', 'asc')),
           (snap) => {
+            firestoreActive.current = true;
             const remote = snap.docs.map((d) => d.data() as Task);
             setTasks(remote);
-            AsyncStorage.setItem(TASKS_KEY, JSON.stringify(remote)).catch(() => {});
+            AsyncStorage.setItem(TASKS_KEY, JSON.stringify(remote)).catch((e) => reportError('TasksScreen.persist', e));
           },
           (err) => reportError('TasksScreen.subscribe', err)
         );

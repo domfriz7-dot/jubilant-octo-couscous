@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
   ScrollView,
   StyleSheet,
@@ -41,6 +42,7 @@ export default function RegisterScreen(): JSX.Element {
       setError('Password must be at least 8 characters.');
       return;
     }
+    Keyboard.dismiss();
     setError('');
     setLoading(true);
     try {

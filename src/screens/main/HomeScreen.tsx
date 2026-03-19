@@ -156,6 +156,7 @@ export default function HomeScreen(): JSX.Element {
                       </Text>
                       <Text style={[styles.eventMeta, { color: theme.text.secondary }]}>
                         {item.date}  ·  {item.time}
+                        {item.location ? `  ·  ${item.location}` : ''}
                         {fromName ? `  ·  from ${fromName}` : ''}
                       </Text>
                     </View>
