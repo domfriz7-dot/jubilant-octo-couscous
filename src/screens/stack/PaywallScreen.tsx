@@ -58,12 +58,9 @@ export default function PaywallScreen(): JSX.Element {
   const nav = useNavigation<Nav>();
   const { isPremium, isLoading, purchasePremium, restorePurchases } = useSubscription();
 
-  // If user somehow lands here already premium, just go back.
   const handleUpgrade = async () => {
-    if (isPremium) { nav.goBack(); return; }
     await purchasePremium();
-    // If purchase succeeded, isPremium will become true via the listener.
-    if (isPremium) nav.goBack();
+    // isPremium updates via the RevenueCat listener after a successful purchase.
   };
 
   return (
@@ -93,7 +90,7 @@ export default function PaywallScreen(): JSX.Element {
           <Text style={styles.crown}>👑</Text>
           <Text style={styles.heroTitle}>U&Me Plus</Text>
           <Text style={styles.heroSubtitle}>
-            Stay connected without limits
+            {isPremium ? 'Your active benefits' : 'Stay connected without limits'}
           </Text>
         </LinearGradient>
 

@@ -234,7 +234,13 @@ export default function ProfileScreen(): JSX.Element {
         {/* U&Me Plus card */}
         <View style={styles.plusSection}>
           {isPremium ? (
-            <View style={[styles.plusCard, styles.plusCardActive, { backgroundColor: theme.bg.card, borderColor: theme.success }]}>
+            <TouchableOpacity
+              style={[styles.plusCard, styles.plusCardActive, { backgroundColor: theme.bg.card, borderColor: theme.success }]}
+              onPress={() => nav.navigate('Paywall', { source: 'profile_active' })}
+              activeOpacity={0.8}
+              accessibilityLabel="View U&Me Plus benefits"
+              accessibilityRole="button"
+            >
               <View style={[styles.plusIconWrap, { backgroundColor: `${theme.success}18` }]}>
                 <Ionicons name="checkmark-circle" size={20} color={theme.success} />
               </View>
@@ -242,7 +248,8 @@ export default function ProfileScreen(): JSX.Element {
                 <Text style={[styles.plusTitle, { color: theme.text.primary }]}>U&Me Plus · Active</Text>
                 <Text style={[styles.plusSub, { color: theme.text.secondary }]}>All premium features unlocked</Text>
               </View>
-            </View>
+              <Ionicons name="chevron-forward" size={16} color={theme.text.tertiary} />
+            </TouchableOpacity>
           ) : (
             <TouchableOpacity
               style={[styles.plusCard, { overflow: 'hidden' }]}
@@ -268,6 +275,19 @@ export default function ProfileScreen(): JSX.Element {
               </LinearGradient>
             </TouchableOpacity>
           )}
+
+          <TouchableOpacity
+            style={styles.whatsIncludedBtn}
+            onPress={() => nav.navigate('Paywall', { source: 'whats_included' })}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="See what's included in U&Me Plus"
+            accessibilityRole="button"
+          >
+            <Text style={[styles.whatsIncludedText, { color: theme.text.accent }]}>
+              See what's included in Plus
+            </Text>
+            <Ionicons name="arrow-forward" size={13} color={theme.text.accent} />
+          </TouchableOpacity>
         </View>
 
         {/* Settings sections */}
@@ -354,6 +374,14 @@ const styles = StyleSheet.create({
   plusIconWrapWhite: { width: 36, height: 36, borderRadius: RADIUS.md, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
   plusTitle: { ...TYPOGRAPHY.bodyBold },
   plusSub: { ...TYPOGRAPHY.caption, marginTop: 1 },
+  whatsIncludedBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: SPACING.sm,
+    gap: SPACING.xs,
+  },
+  whatsIncludedText: { ...TYPOGRAPHY.caption },
   section: { paddingHorizontal: SPACING.screen, marginTop: SPACING.xl },
   sectionTitle: { ...TYPOGRAPHY.label, marginBottom: SPACING.sm },
   sectionCard: { borderRadius: RADIUS.xl, borderWidth: 1, overflow: 'hidden' },
