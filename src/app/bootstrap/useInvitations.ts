@@ -15,7 +15,7 @@ import {
   subscribeToIncomingInvitations,
   subscribeToOutgoingInvitations,
 } from '../../services/InvitationService';
-import { getConnections } from '../../services/ConnectionsService';
+import { getConnections, setLiveConnections, clearLiveConnections } from '../../services/ConnectionsService';
 import CalendarService from '../../services/CalendarService';
 import { EVENT_COLORS } from '../../ui/theme/tokens';
 import { reportError } from '../../utils/reportError';
@@ -116,6 +116,7 @@ export default function useInvitations(): InvitationsState {
             setIncomingInvitations([]);
             setOutgoingInvitations([]);
             setLoading(false);
+            clearLiveConnections();
             return;
           }
 
@@ -138,6 +139,9 @@ export default function useInvitations(): InvitationsState {
 
           const u1 = subscribeToConnections(currentUid, (conns) => {
             setConnections(conns.map((c) => toDisplayConnection(c, currentUid)));
+            // Keep ConnectionsService in sync so AddEventScreen / EventDetailsScreen
+            // always see real connections without needing to pass props/context.
+            setLiveConnections(currentUid, conns);
             connReady = true;
             checkAllReady();
           });

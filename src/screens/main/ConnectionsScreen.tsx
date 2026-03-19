@@ -16,6 +16,7 @@ import { useAppTheme } from '../../ui/theme/ThemeProvider';
 import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../../ui/theme/tokens';
 import useInvitations, { DisplayConnection } from '../../app/bootstrap/useInvitations';
 import { FirestoreInvitation, sendInvitation, acceptInvitation, declineInvitation } from '../../services/InvitationService';
+import { useAwardXP } from '../../app/context/XPContext';
 
 // ─── Avatar ───────────────────────────────────────────────────────────────────
 
@@ -130,6 +131,7 @@ export default function ConnectionsScreen(): JSX.Element {
     displayName,
   } = useInvitations();
 
+  const awardXP = useAwardXP();
   const [search, setSearch] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviting, setInviting] = useState(false);
@@ -170,6 +172,7 @@ export default function ConnectionsScreen(): JSX.Element {
       Alert.alert('Could not send invite', err);
     } else {
       setInviteEmail('');
+      awardXP(15, 'Sent an invitation').catch(() => {});
       Alert.alert('Invite sent!', `An invitation has been sent to ${toEmail}. They'll be notified when they open the app.`);
     }
   };
@@ -181,7 +184,11 @@ export default function ConnectionsScreen(): JSX.Element {
     setBusyInvitationId(inv.id);
     const err = await acceptInvitation(inv.id, inv, uid, displayName ?? email ?? 'User');
     setBusyInvitationId(null);
-    if (err) Alert.alert('Error', err);
+    if (err) {
+      Alert.alert('Error', err);
+    } else {
+      awardXP(20, 'Connected with someone').catch(() => {});
+    }
   };
 
   const handleDecline = (inv: FirestoreInvitation) => {

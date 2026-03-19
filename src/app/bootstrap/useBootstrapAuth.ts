@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { reportError } from '../../utils/reportError';
 import { ensureUserProfile } from '../../services/InvitationService';
+import { setAuthUid } from '../../services/IdentityService';
+import NotificationService from '../../services/NotificationService';
 
 interface AuthUser {
   uid: string;
@@ -36,6 +38,9 @@ export default function useBootstrapAuth(): BootstrapAuthResult {
           auth,
           async (firebaseUser) => {
             if (firebaseUser) {
+              // Make getUserId() return the Firebase UID everywhere in the app
+              setAuthUid(firebaseUser.uid);
+
               setUser({
                 uid: firebaseUser.uid,
                 email: firebaseUser.email,
@@ -43,14 +48,23 @@ export default function useBootstrapAuth(): BootstrapAuthResult {
                 photoURL: firebaseUser.photoURL,
               });
 
-              // Upsert /users/{uid} so other users can look this person up by
-              // UID (invitation resolution, push-token storage). Fire-and-forget.
-              ensureUserProfile(
-                firebaseUser.uid,
-                firebaseUser.email,
-                firebaseUser.displayName
-              ).catch((e) => reportError('useBootstrapAuth.ensureProfile', e));
+              // Upsert /users/{uid} including the current FCM push token so
+              // Cloud Functions can deliver notifications to this device.
+              const syncProfile = (token: string | null) => {
+                ensureUserProfile(
+                  firebaseUser.uid,
+                  firebaseUser.email,
+                  firebaseUser.displayName,
+                  token
+                ).catch((e) => reportError('useBootstrapAuth.ensureProfile', e));
+              };
+
+              // Sync immediately with whatever token is already available,
+              // then re-sync whenever the token refreshes.
+              syncProfile(NotificationService.getToken());
+              NotificationService.onTokenRefresh((newToken) => syncProfile(newToken));
             } else {
+              setAuthUid(null);
               setUser(null);
             }
             setReady(true);

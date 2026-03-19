@@ -20,6 +20,7 @@ import AuthNavigator from './src/navigation/AuthNavigator';
 import { ThemeProvider, useAppTheme } from './src/ui/theme/ThemeProvider';
 import ErrorBoundary from './src/components/ErrorBoundary';
 
+import { XPProvider } from './src/app/context/XPContext';
 import useBootstrapTelemetry from './src/app/bootstrap/useBootstrapTelemetry';
 import useOnboardingGate from './src/app/bootstrap/useOnboardingGate';
 import useBootstrapXP from './src/app/bootstrap/useBootstrapXP';
@@ -160,7 +161,8 @@ function AppShell(): JSX.Element {
     PlacesKeyService.init();
   }, []);
 
-  // Register for push notifications & set up tap-to-navigate routing
+  // Register for push notifications & set up tap-to-navigate routing.
+  // Registration is best-effort — errors are caught inside NotificationService.
   useEffect(() => {
     NotificationService.registerForPushNotifications();
     NotificationService.setupResponseListener((data: NotificationPayload) => {
@@ -170,7 +172,7 @@ function AppShell(): JSX.Element {
   }, [handleNotificationNav]);
 
   const { isOnboardingComplete, markComplete } = useOnboardingGate();
-  const { xpToast, levelUp, hideXPToast, closeLevelUp } = useBootstrapXP();
+  const { xpToast, levelUp, awardXP, hideXPToast, closeLevelUp } = useBootstrapXP();
 
   if (isOnboardingComplete === null) {
     return <View style={{ flex: 1, backgroundColor: theme.bg.default }} />;
@@ -192,6 +194,7 @@ function AppShell(): JSX.Element {
       <SafeAreaProvider>
         <StatusBar style={isDark ? 'light' : 'dark'} />
         <View style={[styles.container, { backgroundColor: theme.bg.default }]}>
+          <XPProvider value={awardXP}>
           <NavigationContainer
             ref={navigationRef}
             onReady={() => {
@@ -215,6 +218,7 @@ function AppShell(): JSX.Element {
           >
             {authEnabled && !user ? <AuthNavigator /> : <RootNavigator />}
           </NavigationContainer>
+          </XPProvider>
 
           <XPNotification visible={xpToast.visible} xp={xpToast.xp} reason={xpToast.reason} onHide={hideXPToast} />
           <LevelUpModal visible={levelUp.visible} levelData={levelUp.levelData} onClose={closeLevelUp} />

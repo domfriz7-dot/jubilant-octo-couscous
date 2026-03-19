@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   FlatList,
   StyleSheet,
@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../ui/theme/ThemeProvider';
 import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../../ui/theme/tokens';
 import { reportError } from '../../utils/reportError';
+import { useAwardXP } from '../../app/context/XPContext';
 
 const TASKS_KEY = '@uandme/tasks';
 
@@ -25,52 +26,174 @@ interface Task {
   createdAt: string;
 }
 
+function isFirebaseConfigured(): boolean {
+  return Boolean(process.env.EXPO_PUBLIC_FIREBASE_API_KEY);
+}
+
+// ─── useTasks ─────────────────────────────────────────────────────────────────
+
 function useTasks() {
   const [tasks, setTasks] = React.useState<Task[]>([]);
+  const [uid, setUid] = React.useState<string | null>(null);
+  // Track whether Firestore listener has taken over from AsyncStorage
+  const firestoreActive = useRef(false);
 
-  React.useEffect(() => {
+  // 1. Load from AsyncStorage immediately for fast first render
+  useEffect(() => {
     AsyncStorage.getItem(TASKS_KEY)
-      .then((v) => { if (v) setTasks(JSON.parse(v)); })
+      .then((v) => {
+        if (v && !firestoreActive.current) setTasks(JSON.parse(v));
+      })
       .catch((e) => reportError('TasksScreen.load', e));
   }, []);
 
-  const save = useCallback((next: Task[]) => {
+  // 2. Watch auth state to get uid
+  useEffect(() => {
+    if (!isFirebaseConfigured()) return;
+    let authUnsub: (() => void) | undefined;
+    (async () => {
+      try {
+        const { getAuth, onAuthStateChanged } = await import('firebase/auth');
+        authUnsub = onAuthStateChanged(getAuth(), (user) => setUid(user?.uid ?? null));
+      } catch (e) {
+        reportError('TasksScreen.auth', e);
+      }
+    })();
+    return () => authUnsub?.();
+  }, []);
+
+  // 3. Real-time Firestore listener — replaces AsyncStorage as source of truth
+  useEffect(() => {
+    if (!uid || !isFirebaseConfigured()) return;
+    let alive = true;
+    let unsub: () => void = () => {};
+
+    (async () => {
+      try {
+        const { getFirestore, collection, query, orderBy, onSnapshot } = await import('firebase/firestore');
+        if (!alive) return;
+        firestoreActive.current = true;
+
+        unsub = onSnapshot(
+          query(collection(getFirestore(), 'users', uid, 'tasks'), orderBy('createdAt', 'asc')),
+          (snap) => {
+            const remote = snap.docs.map((d) => d.data() as Task);
+            setTasks(remote);
+            AsyncStorage.setItem(TASKS_KEY, JSON.stringify(remote)).catch(() => {});
+          },
+          (err) => reportError('TasksScreen.subscribe', err)
+        );
+      } catch (e) {
+        reportError('TasksScreen.subscribe.init', e);
+      }
+    })();
+
+    return () => {
+      alive = false;
+      firestoreActive.current = false;
+      unsub();
+    };
+  }, [uid]);
+
+  // ─── Helpers ────────────────────────────────────────────────────────────────
+
+  const saveLocal = useCallback((next: Task[]) => {
     setTasks(next);
     AsyncStorage.setItem(TASKS_KEY, JSON.stringify(next)).catch((e) => reportError('TasksScreen.save', e));
   }, []);
 
-  const add = useCallback((text: string) => {
-    save([
-      ...tasks,
-      { id: `task_${Date.now()}`, text, done: false, createdAt: new Date().toISOString() },
-    ]);
-  }, [tasks, save]);
+  const add = useCallback(async (text: string) => {
+    const task: Task = {
+      id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      text,
+      done: false,
+      createdAt: new Date().toISOString(),
+    };
 
-  const toggle = useCallback((id: string) => {
-    save(tasks.map((t) => t.id === id ? { ...t, done: !t.done } : t));
-  }, [tasks, save]);
+    if (uid && isFirebaseConfigured()) {
+      try {
+        const { getFirestore, doc, setDoc } = await import('firebase/firestore');
+        await setDoc(doc(getFirestore(), 'users', uid, 'tasks', task.id), task);
+        // Firestore listener updates state
+      } catch (e) {
+        reportError('TasksScreen.add', e);
+        // Fallback to local
+        setTasks((prev) => {
+          const next = [...prev, task];
+          AsyncStorage.setItem(TASKS_KEY, JSON.stringify(next)).catch(() => {});
+          return next;
+        });
+      }
+    } else {
+      saveLocal([...tasks, task]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uid, tasks, saveLocal]);
 
-  const remove = useCallback((id: string) => {
-    save(tasks.filter((t) => t.id !== id));
-  }, [tasks, save]);
+  const toggle = useCallback(async (id: string): Promise<boolean> => {
+    const task = tasks.find((t) => t.id === id);
+    if (!task) return false;
+    const willComplete = !task.done;
+
+    if (uid && isFirebaseConfigured()) {
+      try {
+        const { getFirestore, doc, updateDoc } = await import('firebase/firestore');
+        await updateDoc(doc(getFirestore(), 'users', uid, 'tasks', id), { done: willComplete });
+      } catch (e) {
+        reportError('TasksScreen.toggle', e);
+        setTasks((prev) => {
+          const next = prev.map((t) => t.id === id ? { ...t, done: !t.done } : t);
+          AsyncStorage.setItem(TASKS_KEY, JSON.stringify(next)).catch(() => {});
+          return next;
+        });
+      }
+    } else {
+      saveLocal(tasks.map((t) => t.id === id ? { ...t, done: !t.done } : t));
+    }
+    return willComplete;
+  }, [uid, tasks, saveLocal]);
+
+  const remove = useCallback(async (id: string) => {
+    if (uid && isFirebaseConfigured()) {
+      try {
+        const { getFirestore, doc, deleteDoc } = await import('firebase/firestore');
+        await deleteDoc(doc(getFirestore(), 'users', uid, 'tasks', id));
+      } catch (e) {
+        reportError('TasksScreen.remove', e);
+        saveLocal(tasks.filter((t) => t.id !== id));
+      }
+    } else {
+      saveLocal(tasks.filter((t) => t.id !== id));
+    }
+  }, [uid, tasks, saveLocal]);
 
   return { tasks, add, toggle, remove };
 }
+
+// ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function TasksScreen(): JSX.Element {
   const { theme } = useAppTheme();
   const { top } = useSafeAreaInsets();
   const { tasks, add, toggle, remove } = useTasks();
+  const awardXP = useAwardXP();
   const [input, setInput] = useState('');
 
   const pending = tasks.filter((t) => !t.done);
   const done = tasks.filter((t) => t.done);
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     const text = input.trim();
     if (!text) return;
-    add(text);
     setInput('');
+    await add(text);
+  };
+
+  const handleToggle = async (id: string) => {
+    const completed = await toggle(id);
+    if (completed) {
+      awardXP(5, 'Completed a task').catch(() => {});
+    }
   };
 
   const handleLongPress = (id: string) => {
@@ -132,7 +255,7 @@ export default function TasksScreen(): JSX.Element {
         renderItem={({ item }) => (
           <TouchableOpacity
             style={[styles.taskCard, { backgroundColor: theme.bg.card, borderColor: theme.border.default }, SHADOW.sm]}
-            onPress={() => toggle(item.id)}
+            onPress={() => handleToggle(item.id)}
             onLongPress={() => handleLongPress(item.id)}
             activeOpacity={0.8}
           >

@@ -4,6 +4,7 @@ import { reportError } from '../utils/reportError';
 
 type NotificationData = Record<string, unknown>;
 type ResponseCallback = (data: NotificationData) => void;
+type TokenCallback = (token: string) => void;
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -16,6 +17,9 @@ Notifications.setNotificationHandler({
 });
 
 let _responseSubscription: Notifications.EventSubscription | null = null;
+let _tokenSubscription: Notifications.EventSubscription | null = null;
+let _storedToken: string | null = null;
+let _tokenCallback: TokenCallback | null = null;
 
 const NotificationService = {
   async registerForPushNotifications(): Promise<string | null> {
@@ -38,11 +42,33 @@ const NotificationService = {
       if (finalStatus !== 'granted') return null;
 
       const token = await Notifications.getExpoPushTokenAsync();
-      return token.data;
+      _storedToken = token.data;
+
+      // Listen for token refreshes so Firestore always has the current token
+      _tokenSubscription?.remove();
+      _tokenSubscription = Notifications.addPushTokenListener((newToken) => {
+        _storedToken = newToken.data;
+        _tokenCallback?.(newToken.data);
+      });
+
+      return _storedToken;
     } catch (e) {
       reportError('NotificationService.register', e);
       return null;
     }
+  },
+
+  /** Returns the most-recently obtained push token, or null if not yet registered. */
+  getToken(): string | null {
+    return _storedToken;
+  },
+
+  /**
+   * Register a callback that fires whenever the push token changes (refresh).
+   * Used by useBootstrapAuth to keep the Firestore user profile in sync.
+   */
+  onTokenRefresh(cb: TokenCallback): void {
+    _tokenCallback = cb;
   },
 
   setupResponseListener(callback: ResponseCallback): void {
@@ -59,6 +85,9 @@ const NotificationService = {
   removeListeners(): void {
     _responseSubscription?.remove();
     _responseSubscription = null;
+    _tokenSubscription?.remove();
+    _tokenSubscription = null;
+    _tokenCallback = null;
   },
 
   async scheduleLocalNotification(

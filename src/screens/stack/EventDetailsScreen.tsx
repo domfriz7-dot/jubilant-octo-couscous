@@ -16,7 +16,7 @@ import { RootStackParamList } from '../../navigation/RootNavigator';
 import { useAppTheme } from '../../ui/theme/ThemeProvider';
 import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../../ui/theme/tokens';
 import CalendarService, { CalendarEvent } from '../../services/CalendarService';
-import { getConnectionById } from '../../services/ConnectionsService';
+import { getConnectionByUid } from '../../services/ConnectionsService';
 
 type RouteType = RouteProp<RootStackParamList, 'EventDetails'>;
 
@@ -56,6 +56,10 @@ export default function EventDetailsScreen(): JSX.Element {
     ]);
   };
 
+  const handleEdit = () => {
+    nav.navigate('AddEvent', { eventId: params.eventId });
+  };
+
   if (!event) {
     return (
       <View style={[styles.notFound, { backgroundColor: theme.bg.default }]}>
@@ -81,15 +85,26 @@ export default function EventDetailsScreen(): JSX.Element {
         colors={[event.color, adjustColor(event.color)]}
         style={[styles.hero, { paddingTop: top + SPACING.lg }]}
       >
-        <TouchableOpacity
-          onPress={() => nav.goBack()}
-          style={styles.backBtn}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityLabel="Close"
-          accessibilityRole="button"
-        >
-          <Ionicons name="chevron-down" size={24} color={PALETTE.white} />
-        </TouchableOpacity>
+        <View style={styles.heroNav}>
+          <TouchableOpacity
+            onPress={() => nav.goBack()}
+            style={styles.heroBtn}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Close"
+            accessibilityRole="button"
+          >
+            <Ionicons name="chevron-down" size={24} color={PALETTE.white} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleEdit}
+            style={styles.heroBtn}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Edit event"
+            accessibilityRole="button"
+          >
+            <Ionicons name="pencil" size={20} color={PALETTE.white} />
+          </TouchableOpacity>
+        </View>
         <View style={styles.heroContent}>
           <Text style={styles.heroTitle}>{event.title}</Text>
           <Text style={styles.heroDate}>{event.date}  ·  {event.time}</Text>
@@ -124,16 +139,18 @@ export default function EventDetailsScreen(): JSX.Element {
             <Text style={[styles.sectionTitle, { color: theme.text.secondary }]}>Shared with</Text>
             <View style={[styles.card, { backgroundColor: theme.bg.card, borderColor: theme.border.default }, SHADOW.sm]}>
               {event.sharedWith.map((uid, i) => {
-                const user = getConnectionById(uid);
-                if (!user) return null;
+                // Look up by partner's Firebase UID (works for both real and demo connections)
+                const user = getConnectionByUid(uid);
+                const displayName = user?.name ?? uid;
+                const displayColor = user?.color ?? PALETTE.indigo600;
                 return (
                   <React.Fragment key={uid}>
                     {i > 0 && <View style={[styles.divider, { backgroundColor: theme.border.subtle }]} />}
                     <View style={styles.detailRow}>
-                      <View style={[styles.avatar, { backgroundColor: user.color }]}>
-                        <Text style={styles.avatarText}>{user.name.charAt(0)}</Text>
+                      <View style={[styles.avatar, { backgroundColor: displayColor }]}>
+                        <Text style={styles.avatarText}>{displayName.charAt(0).toUpperCase()}</Text>
                       </View>
-                      <Text style={[styles.detailValue, { color: theme.text.primary }]}>{user.name}</Text>
+                      <Text style={[styles.detailValue, { color: theme.text.primary }]}>{displayName}</Text>
                     </View>
                   </React.Fragment>
                 );
@@ -179,8 +196,12 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.xxxl,
     gap: SPACING.md,
   },
-  backBtn: {
-    alignSelf: 'flex-start',
+  heroNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  heroBtn: {
     width: 40,
     height: 40,
     borderRadius: RADIUS.full,

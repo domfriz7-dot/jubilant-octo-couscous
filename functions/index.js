@@ -143,13 +143,24 @@ exports.onEventShared = onDocumentCreated('events/{eventId}', async (event) => {
 
   try {
     const db = getFirestore();
+
+    // Resolve the owner's display name so the notification reads naturally.
+    let ownerName = ownerId;
+    try {
+      const ownerSnap = await db.doc(`users/${ownerId}`).get();
+      const ownerData = ownerSnap.data();
+      ownerName = ownerData?.displayName || ownerData?.email || ownerId;
+    } catch {
+      // Non-fatal — fall back to UID in the notification body
+    }
+
     const tokenDocs = await Promise.all(sharedWith.map((uid) => db.doc(`users/${uid}`).get()));
     const tokens = tokenDocs.map((d) => d.data()?.fcmToken).filter(Boolean);
     if (!tokens.length) return;
 
     await getMessaging().sendEachForMulticast({
       tokens,
-      notification: { title: 'New shared event', body: `${ownerId} shared "${title}" with you` },
+      notification: { title: 'New shared event', body: `${ownerName} shared "${title}" with you` },
       data: { kind: 'event_shared', eventId: event.params.eventId },
     });
   } catch (err) {

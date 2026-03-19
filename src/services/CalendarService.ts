@@ -112,12 +112,40 @@ const CalendarService = {
       e.id === id ? { ...e, ...patch, updatedAt: new Date().toISOString() } : e
     );
     await persist();
+
+    // Keep Firestore in sync for shared events
+    const updated = _events.find((e) => e.id === id);
+    if (updated && updated.sharedWith.length > 0 && isFirebaseConfigured()) {
+      try {
+        const { getFirestore, doc, updateDoc } = await import('firebase/firestore');
+        await updateDoc(doc(getFirestore(), 'events', id), {
+          ...patch,
+          updatedAt: updated.updatedAt,
+        });
+      } catch (e) {
+        reportError('CalendarService.updateEvent.firestore', e);
+      }
+    }
+
     notify();
   },
 
   async deleteEvent(id: string): Promise<void> {
+    const target = _events.find((e) => e.id === id);
     _events = _events.filter((e) => e.id !== id);
+    _sharedEvents = _sharedEvents.filter((e) => e.id !== id);
     await persist();
+
+    // Remove from Firestore if it was a shared event
+    if (target && target.sharedWith.length > 0 && isFirebaseConfigured()) {
+      try {
+        const { getFirestore, doc, deleteDoc } = await import('firebase/firestore');
+        await deleteDoc(doc(getFirestore(), 'events', id));
+      } catch (e) {
+        reportError('CalendarService.deleteEvent.firestore', e);
+      }
+    }
+
     notify();
   },
 
@@ -130,6 +158,7 @@ const CalendarService = {
   subscribeToSharedEvents(uid: string): () => void {
     if (!isFirebaseConfigured()) return () => {};
 
+    let alive = true;
     let unsub: () => void = () => {};
 
     (async () => {
@@ -141,6 +170,7 @@ const CalendarService = {
           where,
           onSnapshot,
         } = await import('firebase/firestore');
+        if (!alive) return;
         const db = getFirestore();
 
         unsub = onSnapshot(
@@ -159,7 +189,7 @@ const CalendarService = {
       }
     })();
 
-    return () => unsub();
+    return () => { alive = false; unsub(); };
   },
 
   subscribe(listener: Listener): () => void {

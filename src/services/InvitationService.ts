@@ -87,7 +87,7 @@ export async function ensureUserProfile(
 ): Promise<void> {
   if (!isFirebaseConfigured()) return;
   try {
-    const { getFirestore, doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+    const { getFirestore, doc, setDoc } = await import('firebase/firestore');
     const db = getFirestore();
     await setDoc(
       doc(db, 'users', uid),
@@ -189,8 +189,9 @@ export async function sendInvitation(
 }
 
 /**
- * Accept a pending invitation.
- * Updates invitation status and creates a /connections document.
+ * Accept a pending invitation atomically.
+ * Uses a Firestore transaction to prevent duplicate connections if two devices
+ * attempt to accept the same invite simultaneously.
  */
 export async function acceptInvitation(
   invitationId: string,
@@ -203,34 +204,42 @@ export async function acceptInvitation(
     const {
       getFirestore,
       doc,
-      updateDoc,
-      addDoc,
       collection,
+      runTransaction,
     } = await import('firebase/firestore');
     const db = getFirestore();
+    const invRef = doc(db, 'invitations', invitationId);
+    // Pre-allocate connection document reference (auto-ID)
+    const connRef = doc(collection(db, 'connections'));
 
-    // Update invitation status
-    await updateDoc(doc(db, 'invitations', invitationId), {
-      status: 'accepted',
-      toUid: acceptorUid,
-      updatedAt: now(),
-    });
+    await runTransaction(db, async (tx) => {
+      const invSnap = await tx.get(invRef);
+      if (!invSnap.exists()) throw new Error('Invitation not found.');
+      if (invSnap.data()?.status !== 'pending') throw new Error('This invitation is no longer pending.');
 
-    // Create connection document
-    await addDoc(collection(db, 'connections'), {
-      fromUid: invitation.fromUid,
-      toUid: acceptorUid,
-      fromEmail: invitation.fromEmail,
-      toEmail: invitation.toEmail,
-      fromName: invitation.fromName,
-      toName: acceptorName,
-      status: 'active',
-      createdAt: now(),
+      tx.update(invRef, {
+        status: 'accepted',
+        toUid: acceptorUid,
+        updatedAt: now(),
+      });
+
+      tx.set(connRef, {
+        fromUid: invitation.fromUid,
+        toUid: acceptorUid,
+        fromEmail: invitation.fromEmail,
+        toEmail: invitation.toEmail,
+        fromName: invitation.fromName,
+        toName: acceptorName,
+        status: 'active',
+        createdAt: now(),
+      });
     });
 
     return null; // success
-  } catch (e) {
+  } catch (e: any) {
     reportError('InvitationService.acceptInvitation', e);
+    const msg: string = e?.message ?? '';
+    if (msg.includes('no longer pending') || msg.includes('not found')) return msg;
     return 'Could not accept invite. Please try again.';
   }
 }
@@ -265,6 +274,7 @@ export function subscribeToConnections(
 ): UnsubscribeFn {
   if (!isFirebaseConfigured()) return () => {};
 
+  let alive = true;
   let unsub1: UnsubscribeFn = () => {};
   let unsub2: UnsubscribeFn = () => {};
 
@@ -294,6 +304,7 @@ export function subscribeToConnections(
         where,
         onSnapshot,
       } = await import('firebase/firestore');
+      if (!alive) return;
       const db = getFirestore();
       const col = collection(db, 'connections');
 
@@ -319,7 +330,7 @@ export function subscribeToConnections(
     }
   })();
 
-  return () => { unsub1(); unsub2(); };
+  return () => { alive = false; unsub1(); unsub2(); };
 }
 
 /**
@@ -332,6 +343,7 @@ export function subscribeToIncomingInvitations(
 ): UnsubscribeFn {
   if (!isFirebaseConfigured()) return () => {};
 
+  let alive = true;
   let unsubByUid: UnsubscribeFn = () => {};
   let unsubByEmail: UnsubscribeFn = () => {};
   let byUid: FirestoreInvitation[] = [];
@@ -358,6 +370,7 @@ export function subscribeToIncomingInvitations(
         where,
         onSnapshot,
       } = await import('firebase/firestore');
+      if (!alive) return;
       const db = getFirestore();
       const col = collection(db, 'invitations');
 
@@ -390,7 +403,7 @@ export function subscribeToIncomingInvitations(
     }
   })();
 
-  return () => { unsubByUid(); unsubByEmail(); };
+  return () => { alive = false; unsubByUid(); unsubByEmail(); };
 }
 
 /**
@@ -402,6 +415,7 @@ export function subscribeToOutgoingInvitations(
 ): UnsubscribeFn {
   if (!isFirebaseConfigured()) return () => {};
 
+  let alive = true;
   let unsub: UnsubscribeFn = () => {};
 
   (async () => {
@@ -414,6 +428,7 @@ export function subscribeToOutgoingInvitations(
         onSnapshot,
         orderBy,
       } = await import('firebase/firestore');
+      if (!alive) return;
       const db = getFirestore();
       unsub = onSnapshot(
         query(
@@ -432,5 +447,5 @@ export function subscribeToOutgoingInvitations(
     }
   })();
 
-  return () => unsub();
+  return () => { alive = false; unsub(); };
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -19,6 +19,7 @@ import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE, EVENT_COLORS } from '../.
 import CalendarService from '../../services/CalendarService';
 import { getUserId } from '../../services/IdentityService';
 import { getActiveConnections } from '../../services/ConnectionsService';
+import { useAwardXP } from '../../app/context/XPContext';
 
 type RouteType = RouteProp<RootStackParamList, 'AddEvent'>;
 
@@ -39,6 +40,9 @@ export default function AddEventScreen(): JSX.Element {
   const { top, bottom } = useSafeAreaInsets();
   const nav = useNavigation<StackNavigationProp<RootStackParamList, 'AddEvent'>>();
   const { params } = useRoute<RouteType>();
+  const awardXP = useAwardXP();
+
+  const isEditing = Boolean(params?.eventId);
 
   const [title, setTitle] = useState('');
   const [date, setDate] = useState(params?.selectedDate ?? new Date().toISOString().slice(0, 10));
@@ -51,19 +55,28 @@ export default function AddEventScreen(): JSX.Element {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  // Pre-fill form when editing an existing event
+  useEffect(() => {
+    if (!params?.eventId) return;
+    const existing = CalendarService.getEvents().find((e) => e.id === params.eventId);
+    if (!existing) return;
+    setTitle(existing.title);
+    setDate(existing.date);
+    setTime(existing.time);
+    setEndTime(existing.endTime ?? '');
+    setDescription(existing.description ?? '');
+    setLocation(existing.location ?? '');
+    setColor(existing.color);
+    setSharedWith(existing.sharedWith);
+  }, [params?.eventId]);
+
   const toggleShare = (id: string) =>
     setSharedWith((prev) => prev.includes(id) ? prev.filter((u) => u !== id) : [...prev, id]);
 
   const handleSave = async () => {
     if (!title.trim()) { setError('Please enter a title.'); return; }
-
-    // Validate date: format YYYY-MM-DD and must be a real calendar date
     if (!isValidDate(date)) { setError('Date must be a valid date (YYYY-MM-DD).'); return; }
-
-    // Validate time: format HH:MM with valid range
     if (!isValidTime(time)) { setError('Start time must be a valid time (HH:MM).'); return; }
-
-    // Validate optional end time only if provided
     if (endTime.trim() && !isValidTime(endTime.trim())) {
       setError('End time must be a valid time (HH:MM).');
       return;
@@ -71,19 +84,32 @@ export default function AddEventScreen(): JSX.Element {
     setError('');
     setSaving(true);
     try {
-      await CalendarService.addEvent({
-        title: title.trim(),
-        date,
-        time,
-        endTime: endTime.trim() || undefined,
-        description: description.trim() || undefined,
-        location: location.trim() || undefined,
-        color,
-        createdBy: getUserId(),
-        sharedWith,
-      });
-      // Navigate first; setSaving(false) is intentionally skipped on success
-      // because the component unmounts immediately after goBack().
+      if (isEditing && params?.eventId) {
+        await CalendarService.updateEvent(params.eventId, {
+          title: title.trim(),
+          date,
+          time,
+          endTime: endTime.trim() || undefined,
+          description: description.trim() || undefined,
+          location: location.trim() || undefined,
+          color,
+          sharedWith,
+        });
+        await awardXP(5, 'Updated an event');
+      } else {
+        await CalendarService.addEvent({
+          title: title.trim(),
+          date,
+          time,
+          endTime: endTime.trim() || undefined,
+          description: description.trim() || undefined,
+          location: location.trim() || undefined,
+          color,
+          createdBy: getUserId(),
+          sharedWith,
+        });
+        await awardXP(10, 'Created an event');
+      }
       nav.goBack();
     } catch (e: any) {
       setError('Failed to save event. Please try again.');
@@ -106,7 +132,9 @@ export default function AddEventScreen(): JSX.Element {
         >
           <Ionicons name="close" size={24} color={theme.text.primary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text.primary }]}>New Event</Text>
+        <Text style={[styles.headerTitle, { color: theme.text.primary }]}>
+          {isEditing ? 'Edit Event' : 'New Event'}
+        </Text>
         <TouchableOpacity
           onPress={handleSave}
           disabled={saving}
@@ -138,7 +166,7 @@ export default function AddEventScreen(): JSX.Element {
           onChangeText={setTitle}
           placeholder="Event title"
           placeholderTextColor={theme.text.tertiary}
-          autoFocus
+          autoFocus={!isEditing}
           returnKeyType="next"
         />
 
@@ -220,25 +248,33 @@ export default function AddEventScreen(): JSX.Element {
         {/* Share with */}
         <Text style={[styles.sectionLabel, { color: theme.text.secondary }]}>Share with</Text>
         <View style={[styles.card, { backgroundColor: theme.bg.card, borderColor: theme.border.default }, SHADOW.sm]}>
-          {getActiveConnections().map((u, i) => (
-            <React.Fragment key={u.id}>
-              {i > 0 && <View style={[styles.divider, { backgroundColor: theme.border.subtle }]} />}
-              <TouchableOpacity
-                style={styles.shareRow}
-                onPress={() => toggleShare(u.id)}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.shareUserName, { color: theme.text.primary }]}>{u.name}</Text>
-                <View style={[
-                  styles.checkbox,
-                  { borderColor: sharedWith.includes(u.id) ? theme.primary : theme.border.default },
-                  sharedWith.includes(u.id) && { backgroundColor: theme.primary },
-                ]}>
-                  {sharedWith.includes(u.id) && <Ionicons name="checkmark" size={12} color={PALETTE.white} />}
-                </View>
-              </TouchableOpacity>
-            </React.Fragment>
-          ))}
+          {getActiveConnections().length === 0 ? (
+            <View style={styles.emptyShare}>
+              <Text style={[styles.emptyShareText, { color: theme.text.tertiary }]}>
+                No connections yet. Add people from the People tab.
+              </Text>
+            </View>
+          ) : (
+            getActiveConnections().map((u, i) => (
+              <React.Fragment key={u.id}>
+                {i > 0 && <View style={[styles.divider, { backgroundColor: theme.border.subtle }]} />}
+                <TouchableOpacity
+                  style={styles.shareRow}
+                  onPress={() => toggleShare(u.id)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.shareUserName, { color: theme.text.primary }]}>{u.name}</Text>
+                  <View style={[
+                    styles.checkbox,
+                    { borderColor: sharedWith.includes(u.id) ? theme.primary : theme.border.default },
+                    sharedWith.includes(u.id) && { backgroundColor: theme.primary },
+                  ]}>
+                    {sharedWith.includes(u.id) && <Ionicons name="checkmark" size={12} color={PALETTE.white} />}
+                  </View>
+                </TouchableOpacity>
+              </React.Fragment>
+            ))
+          )}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -303,6 +339,8 @@ const styles = StyleSheet.create({
     borderColor: PALETTE.white,
     ...SHADOW.sm,
   },
+  emptyShare: { padding: SPACING.md },
+  emptyShareText: { ...TYPOGRAPHY.caption },
   shareRow: { flexDirection: 'row', alignItems: 'center', padding: SPACING.md, gap: SPACING.md },
   shareUserName: { ...TYPOGRAPHY.body, flex: 1 },
   checkbox: {

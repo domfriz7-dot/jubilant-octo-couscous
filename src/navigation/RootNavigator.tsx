@@ -81,7 +81,7 @@ function MainTabs(): JSX.Element {
 export type RootStackParamList = {
   MainTabs: { screen?: keyof MainTabParamList } | undefined;
   EventDetails: { eventId: string };
-  AddEvent: { selectedDate?: string };
+  AddEvent: { selectedDate?: string; eventId?: string };
   WeeklyReport: undefined;
 };
 
