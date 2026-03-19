@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../ui/theme/ThemeProvider';
 import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../../ui/theme/tokens';
@@ -18,6 +20,10 @@ import { DisplayConnection } from '../../app/bootstrap/useInvitations';
 import { useConnectionsContext } from '../../app/context/ConnectionsContext';
 import { FirestoreInvitation, sendInvitation, acceptInvitation, declineInvitation } from '../../services/InvitationService';
 import { useAwardXP } from '../../app/context/XPContext';
+import { useSubscription } from '../../app/context/SubscriptionContext';
+import { RootStackParamList } from '../../navigation/RootNavigator';
+
+type RootNav = StackNavigationProp<RootStackParamList>;
 
 // ─── Avatar ───────────────────────────────────────────────────────────────────
 
@@ -119,6 +125,7 @@ function ConnectionRow({ item }: { item: DisplayConnection }) {
 export default function ConnectionsScreen(): JSX.Element {
   const { theme } = useAppTheme();
   const { top } = useSafeAreaInsets();
+  const nav = useNavigation<RootNav>();
 
   const {
     connections,
@@ -133,6 +140,7 @@ export default function ConnectionsScreen(): JSX.Element {
   } = useConnectionsContext();
 
   const awardXP = useAwardXP();
+  const { isPremium } = useSubscription();
   const [search, setSearch] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviting, setInviting] = useState(false);
@@ -153,6 +161,12 @@ export default function ConnectionsScreen(): JSX.Element {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(toEmail)) {
       Alert.alert('Invalid email', 'Please enter a valid email address.');
+      return;
+    }
+
+    // Free users are limited to 1 active connection.
+    if (!isPremium && connections.length >= 1) {
+      nav.navigate('Paywall', { source: 'connections_limit' });
       return;
     }
 

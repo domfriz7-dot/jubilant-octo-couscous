@@ -2,12 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { Alert, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { useAppTheme } from '../../ui/theme/ThemeProvider';
 import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../../ui/theme/tokens';
 import { reportError } from '../../utils/reportError';
+import { useSubscription } from '../../app/context/SubscriptionContext';
+import { RootStackParamList } from '../../navigation/RootNavigator';
+
+type RootNav = StackNavigationProp<RootStackParamList>;
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -59,7 +65,9 @@ function useAuthProfile(): AuthProfile {
 export default function ProfileScreen(): JSX.Element {
   const { theme, isDark, setPreference } = useAppTheme();
   const { top, bottom } = useSafeAreaInsets();
+  const nav = useNavigation<RootNav>();
   const { displayName, email, uid } = useAuthProfile();
+  const { isPremium } = useSubscription();
 
   // Derive what to show in the header
   const headerName = displayName || email?.split('@')[0] || 'You';
@@ -137,6 +145,22 @@ export default function ProfileScreen(): JSX.Element {
 
   const sections: { title: string; rows: SettingRow[] }[] = [
     {
+      title: 'Reports',
+      rows: [
+        {
+          icon: 'bar-chart-outline',
+          label: 'Weekly Report',
+          onPress: () => {
+            if (isPremium) {
+              nav.navigate('WeeklyReport');
+            } else {
+              nav.navigate('Paywall', { source: 'weekly_report' });
+            }
+          },
+        },
+      ],
+    },
+    {
       title: 'Appearance',
       rows: [
         {
@@ -206,6 +230,45 @@ export default function ProfileScreen(): JSX.Element {
             <Text style={styles.userSub} numberOfLines={1}>{headerSub}</Text>
           ) : null}
         </LinearGradient>
+
+        {/* U&Me Plus card */}
+        <View style={styles.plusSection}>
+          {isPremium ? (
+            <View style={[styles.plusCard, styles.plusCardActive, { backgroundColor: theme.bg.card, borderColor: theme.success }]}>
+              <View style={[styles.plusIconWrap, { backgroundColor: `${theme.success}18` }]}>
+                <Ionicons name="checkmark-circle" size={20} color={theme.success} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.plusTitle, { color: theme.text.primary }]}>U&Me Plus · Active</Text>
+                <Text style={[styles.plusSub, { color: theme.text.secondary }]}>All premium features unlocked</Text>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.plusCard, { overflow: 'hidden' }]}
+              onPress={() => nav.navigate('Paywall', { source: 'profile' })}
+              activeOpacity={0.85}
+              accessibilityLabel="Upgrade to U&Me Plus"
+              accessibilityRole="button"
+            >
+              <LinearGradient
+                colors={theme.gradient.primary}
+                style={styles.plusCardGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <View style={styles.plusIconWrapWhite}>
+                  <Ionicons name="crown" size={20} color={PALETTE.white} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.plusTitle, { color: PALETTE.white }]}>Upgrade to U&Me Plus</Text>
+                  <Text style={[styles.plusSub, { color: 'rgba(255,255,255,0.8)' }]}>Unlimited connections & more</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={PALETTE.white} />
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Settings sections */}
         {sections.map((section) => (
@@ -278,6 +341,19 @@ const styles = StyleSheet.create({
   avatarLetter: { fontSize: 36, fontWeight: '700', color: PALETTE.white },
   userName: { ...TYPOGRAPHY.heading, color: PALETTE.white },
   userSub: { ...TYPOGRAPHY.caption, color: 'rgba(255,255,255,0.7)', maxWidth: 260 },
+  plusSection: { paddingHorizontal: SPACING.screen, marginTop: SPACING.xl },
+  plusCard: {
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    ...SHADOW.sm,
+  },
+  plusCardActive: { flexDirection: 'row', alignItems: 'center', padding: SPACING.md, gap: SPACING.md },
+  plusCardGradient: { flexDirection: 'row', alignItems: 'center', padding: SPACING.md, gap: SPACING.md, borderRadius: RADIUS.xl },
+  plusIconWrap: { width: 36, height: 36, borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center' },
+  plusIconWrapWhite: { width: 36, height: 36, borderRadius: RADIUS.md, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  plusTitle: { ...TYPOGRAPHY.bodyBold },
+  plusSub: { ...TYPOGRAPHY.caption, marginTop: 1 },
   section: { paddingHorizontal: SPACING.screen, marginTop: SPACING.xl },
   sectionTitle: { ...TYPOGRAPHY.label, marginBottom: SPACING.sm },
   sectionCard: { borderRadius: RADIUS.xl, borderWidth: 1, overflow: 'hidden' },

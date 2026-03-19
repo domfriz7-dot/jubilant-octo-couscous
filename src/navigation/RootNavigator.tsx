@@ -15,6 +15,7 @@ import ProfileScreen from '../screens/main/ProfileScreen';
 import EventDetailsScreen from '../screens/stack/EventDetailsScreen';
 import AddEventScreen from '../screens/stack/AddEventScreen';
 import WeeklyReportScreen from '../screens/stack/WeeklyReportScreen';
+import PaywallScreen from '../screens/stack/PaywallScreen';
 
 // ─── Tab Navigator ────────────────────────────────────────────────────────────
 
@@ -83,6 +84,7 @@ export type RootStackParamList = {
   EventDetails: { eventId: string };
   AddEvent: { selectedDate?: string; eventId?: string };
   WeeklyReport: undefined;
+  Paywall: { source?: string } | undefined;
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -112,6 +114,11 @@ export default function RootNavigator(): JSX.Element {
         name="WeeklyReport"
         component={WeeklyReportScreen}
         options={{ presentation: 'card' }}
+      />
+      <Stack.Screen
+        name="Paywall"
+        component={PaywallScreen}
+        options={{ presentation: 'modal', gestureEnabled: true }}
       />
     </Stack.Navigator>
   );

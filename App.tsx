@@ -22,6 +22,7 @@ import ErrorBoundary from './src/components/ErrorBoundary';
 
 import { XPProvider } from './src/app/context/XPContext';
 import { ConnectionsProvider } from './src/app/context/ConnectionsContext';
+import { SubscriptionProvider } from './src/app/context/SubscriptionContext';
 import useBootstrapTelemetry from './src/app/bootstrap/useBootstrapTelemetry';
 import useOnboardingGate from './src/app/bootstrap/useOnboardingGate';
 import useBootstrapXP from './src/app/bootstrap/useBootstrapXP';
@@ -32,7 +33,6 @@ import useBootstrapBackend from './src/app/bootstrap/useBootstrapBackend';
 import { useNetworkStatus } from './src/hooks/useNetworkStatus';
 import OfflineBanner from './src/components/OfflineBanner';
 import useBootstrapRuntimeSafety from './src/app/bootstrap/useBootstrapRuntimeSafety';
-import useBootstrapSubscriptions from './src/app/bootstrap/useBootstrapSubscriptions';
 import useBootstrapAuth from './src/app/bootstrap/useBootstrapAuth';
 import PlacesKeyService from './src/services/PlacesKeyService';
 import NotificationService from './src/services/NotificationService';
@@ -148,7 +148,6 @@ function AppShell(): JSX.Element {
   // Bootstrap side-effects (kept out of AppShell body logic)
   useBootstrapTelemetry();
   const { enabled: authEnabled, ready: authReady, user } = useBootstrapAuth();
-  useBootstrapSubscriptions();
   useBootstrapRuntimeSafety();
   useBootstrapDeepLinks(navigationRef);
   useBootstrapAutopilot();
@@ -235,7 +234,9 @@ export default function App(): JSX.Element {
   return (
     <ErrorBoundary>
       <ThemeProvider>
-        <IdentityGate><AppShell /></IdentityGate>
+        <SubscriptionProvider>
+          <IdentityGate><AppShell /></IdentityGate>
+        </SubscriptionProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );
