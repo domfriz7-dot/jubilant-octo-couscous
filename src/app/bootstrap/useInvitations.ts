@@ -24,6 +24,8 @@ import { reportError } from '../../utils/reportError';
 
 export interface DisplayConnection {
   id: string;
+  /** Firebase UID of the connected partner (distinct from the connection doc id). */
+  partnerUid: string;
   name: string;
   email: string;
   color: string;
@@ -54,6 +56,7 @@ function toDisplayConnection(conn: FirestoreConnection, myUid: string): DisplayC
   const amSender = conn.fromUid === myUid;
   return {
     id: conn.id,
+    partnerUid: amSender ? conn.toUid : conn.fromUid,
     name: amSender ? conn.toName : conn.fromName,
     email: amSender ? conn.toEmail : conn.fromEmail,
     color: connectionColor(conn.id),
@@ -66,6 +69,7 @@ function demoConnections(): DisplayConnection[] {
     .filter((c) => c.status === 'active')
     .map((c) => ({
       id: c.id,
+      partnerUid: c.id, // demo: connection id doubles as partner id
       name: c.name,
       email: c.email,
       color: c.color,

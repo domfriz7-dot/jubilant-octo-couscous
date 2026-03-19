@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,6 +16,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../ui/theme/ThemeProvider';
 import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../../ui/theme/tokens';
 import { useSubscription } from '../../app/context/SubscriptionContext';
+import { usePremiumShare } from '../../app/context/PremiumShareContext';
+import { useConnectionsContext } from '../../app/context/ConnectionsContext';
+import { DisplayConnection } from '../../app/bootstrap/useInvitations';
 import { RootStackParamList } from '../../navigation/RootNavigator';
 
 type Nav = StackNavigationProp<RootStackParamList>;
@@ -57,10 +61,35 @@ export default function PaywallScreen(): JSX.Element {
   const { top, bottom } = useSafeAreaInsets();
   const nav = useNavigation<Nav>();
   const { isPremium, isLoading, purchasePremium, restorePurchases } = useSubscription();
+  const { outgoingShare, shareWith, isLoading: shareLoading } = usePremiumShare();
+  const { connections } = useConnectionsContext();
+
+  // Detect the moment a purchase completes (false → true) so we can prompt
+  // the user to share. Don't show the picker if they were already subscribed
+  // on mount (e.g. they navigated here via "See what's included").
+  const wasPremiumOnMount = useRef(isPremium);
+  const [showSharePicker, setShowSharePicker] = useState(false);
+  const [selectedConnection, setSelectedConnection] = useState<DisplayConnection | null>(null);
+
+  useEffect(() => {
+    if (!wasPremiumOnMount.current && isPremium) {
+      setShowSharePicker(true);
+    }
+  }, [isPremium]);
 
   const handleUpgrade = async () => {
     await purchasePremium();
     // isPremium updates via the RevenueCat listener after a successful purchase.
+  };
+
+  const handleConfirmShare = async () => {
+    if (!selectedConnection) return;
+    await shareWith({
+      uid: selectedConnection.partnerUid,
+      name: selectedConnection.name,
+      email: selectedConnection.email,
+    });
+    setShowSharePicker(false);
   };
 
   return (
@@ -130,7 +159,7 @@ export default function PaywallScreen(): JSX.Element {
       <View style={[styles.ctaArea, { backgroundColor: theme.bg.default, borderTopColor: theme.border.default }]}>
         <TouchableOpacity
           onPress={handleUpgrade}
-          disabled={isLoading}
+          disabled={isLoading || isPremium}
           activeOpacity={0.85}
           accessibilityLabel="Get U&Me Plus"
           accessibilityRole="button"
@@ -155,6 +184,12 @@ export default function PaywallScreen(): JSX.Element {
           </LinearGradient>
         </TouchableOpacity>
 
+        {isPremium && outgoingShare && (
+          <Text style={[styles.sharingNote, { color: theme.text.secondary }]}>
+            Shared with {outgoingShare.granteeName}
+          </Text>
+        )}
+
         <TouchableOpacity
           onPress={restorePurchases}
           disabled={isLoading}
@@ -167,6 +202,100 @@ export default function PaywallScreen(): JSX.Element {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Share-with picker — shown after a successful purchase */}
+      <Modal
+        visible={showSharePicker}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowSharePicker(false)}
+      >
+        <View style={styles.pickerOverlay}>
+          <View style={[styles.pickerSheet, { backgroundColor: theme.bg.card }]}>
+            <Text style={[styles.pickerTitle, { color: theme.text.primary }]}>
+              Share Plus with a partner
+            </Text>
+            <Text style={[styles.pickerSub, { color: theme.text.secondary }]}>
+              Your connected partner will also unlock all U&Me Plus features.
+            </Text>
+
+            {connections.length === 0 ? (
+              <View style={styles.emptyConnections}>
+                <Ionicons name="people-outline" size={36} color={theme.text.tertiary} />
+                <Text style={[styles.emptyText, { color: theme.text.secondary }]}>
+                  No connections yet. You can share later from your profile.
+                </Text>
+              </View>
+            ) : (
+              <View style={[styles.connectionList, { borderColor: theme.border.default }]}>
+                {connections.map((conn, i) => {
+                  const selected = selectedConnection?.id === conn.id;
+                  return (
+                    <React.Fragment key={conn.id}>
+                      {i > 0 && <View style={[styles.pickerDivider, { backgroundColor: theme.border.subtle }]} />}
+                      <TouchableOpacity
+                        style={[
+                          styles.connectionRow,
+                          selected && { backgroundColor: `${theme.primary}12` },
+                        ]}
+                        onPress={() => setSelectedConnection(selected ? null : conn)}
+                        activeOpacity={0.7}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected }}
+                      >
+                        <View style={[styles.connAvatar, { backgroundColor: conn.color }]}>
+                          <Text style={styles.connAvatarText}>{conn.name.charAt(0).toUpperCase()}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.connName, { color: theme.text.primary }]}>{conn.name}</Text>
+                          <Text style={[styles.connEmail, { color: theme.text.secondary }]}>{conn.email}</Text>
+                        </View>
+                        {selected && <Ionicons name="checkmark-circle" size={22} color={theme.primary} />}
+                      </TouchableOpacity>
+                    </React.Fragment>
+                  );
+                })}
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[
+                styles.shareBtn,
+                { opacity: selectedConnection ? 1 : 0.4 },
+              ]}
+              onPress={handleConfirmShare}
+              disabled={!selectedConnection || shareLoading}
+              activeOpacity={0.85}
+              accessibilityLabel="Share Plus with selected partner"
+              accessibilityRole="button"
+            >
+              <LinearGradient
+                colors={theme.gradient.primary}
+                style={styles.shareBtnGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                {shareLoading ? (
+                  <ActivityIndicator color={PALETTE.white} />
+                ) : (
+                  <Text style={styles.shareBtnText}>
+                    {selectedConnection ? `Share with ${selectedConnection.name}` : 'Select a partner'}
+                  </Text>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setShowSharePicker(false)}
+              hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
+              accessibilityLabel="Skip for now"
+              accessibilityRole="button"
+            >
+              <Text style={[styles.skipText, { color: theme.text.tertiary }]}>Skip for now</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -240,5 +369,52 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   ctaBtnText: { ...TYPOGRAPHY.subheading, color: PALETTE.white },
+  sharingNote: { ...TYPOGRAPHY.caption },
   restoreText: { ...TYPOGRAPHY.caption },
+  // Share picker modal
+  pickerOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  pickerSheet: {
+    borderTopLeftRadius: RADIUS.xxl,
+    borderTopRightRadius: RADIUS.xxl,
+    paddingHorizontal: SPACING.screen,
+    paddingTop: SPACING.xl,
+    paddingBottom: SPACING.xxxl,
+    gap: SPACING.md,
+  },
+  pickerTitle: { ...TYPOGRAPHY.subheading, textAlign: 'center' },
+  pickerSub: { ...TYPOGRAPHY.body, textAlign: 'center', lineHeight: 20 },
+  emptyConnections: { alignItems: 'center', gap: SPACING.sm, paddingVertical: SPACING.xl },
+  emptyText: { ...TYPOGRAPHY.body, textAlign: 'center' },
+  connectionList: { borderRadius: RADIUS.xl, borderWidth: 1, overflow: 'hidden' },
+  pickerDivider: { height: 1, marginLeft: SPACING.md + 40 + SPACING.md },
+  connectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    gap: SPACING.md,
+  },
+  connAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  connAvatarText: { ...TYPOGRAPHY.bodyBold, color: PALETTE.white },
+  connName: { ...TYPOGRAPHY.bodyBold },
+  connEmail: { ...TYPOGRAPHY.caption, marginTop: 1 },
+  shareBtn: { borderRadius: RADIUS.full, overflow: 'hidden', ...SHADOW.md, marginTop: SPACING.sm },
+  shareBtnGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.lg,
+  },
+  shareBtnText: { ...TYPOGRAPHY.subheading, color: PALETTE.white },
+  skipText: { ...TYPOGRAPHY.caption, textAlign: 'center' },
 });

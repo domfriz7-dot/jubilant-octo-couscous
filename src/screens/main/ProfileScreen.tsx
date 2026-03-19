@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Alert, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Linking, Modal, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -11,6 +11,9 @@ import { useAppTheme } from '../../ui/theme/ThemeProvider';
 import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../../ui/theme/tokens';
 import { reportError } from '../../utils/reportError';
 import { useSubscription } from '../../app/context/SubscriptionContext';
+import { usePremiumShare } from '../../app/context/PremiumShareContext';
+import { useConnectionsContext } from '../../app/context/ConnectionsContext';
+import { DisplayConnection } from '../../app/bootstrap/useInvitations';
 import { RootStackParamList } from '../../navigation/RootNavigator';
 
 type RootNav = StackNavigationProp<RootStackParamList>;
@@ -68,6 +71,11 @@ export default function ProfileScreen(): JSX.Element {
   const nav = useNavigation<RootNav>();
   const { displayName, email, uid } = useAuthProfile();
   const { isPremium } = useSubscription();
+  const { outgoingShare, incomingShare, isSharedWithMe, shareWith, revokeShare } = usePremiumShare();
+  const { connections } = useConnectionsContext();
+
+  const [showSharePicker, setShowSharePicker] = useState(false);
+  const [selectedConnection, setSelectedConnection] = useState<DisplayConnection | null>(null);
 
   // Derive what to show in the header
   const headerName = displayName || email?.split('@')[0] || 'You';
@@ -135,6 +143,52 @@ export default function ProfileScreen(): JSX.Element {
         },
       },
     ]);
+  };
+
+  const handleManageSharing = () => {
+    if (outgoingShare) {
+      Alert.alert(
+        `Sharing with ${outgoingShare.granteeName}`,
+        'What would you like to do?',
+        [
+          {
+            text: 'Change partner',
+            onPress: () => {
+              setSelectedConnection(null);
+              setShowSharePicker(true);
+            },
+          },
+          {
+            text: 'Revoke access',
+            style: 'destructive',
+            onPress: () => {
+              Alert.alert(
+                'Revoke Plus access?',
+                `${outgoingShare.granteeName} will lose access to premium features.`,
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Revoke', style: 'destructive', onPress: revokeShare },
+                ]
+              );
+            },
+          },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+    } else {
+      setSelectedConnection(null);
+      setShowSharePicker(true);
+    }
+  };
+
+  const handleConfirmShare = async () => {
+    if (!selectedConnection) return;
+    await shareWith({
+      uid: selectedConnection.partnerUid,
+      name: selectedConnection.name,
+      email: selectedConnection.email,
+    });
+    setShowSharePicker(false);
   };
 
   const openURL = (url: string) => {
@@ -290,6 +344,61 @@ export default function ProfileScreen(): JSX.Element {
           </TouchableOpacity>
         </View>
 
+        {/* Premium sharing card */}
+        {(isPremium || isSharedWithMe) && (
+          <View style={styles.sharingSection}>
+            <Text style={[styles.sectionTitle, { color: theme.text.secondary }]}>PLUS SHARING</Text>
+            <TouchableOpacity
+              style={[styles.sectionCard, styles.sharingCard, { backgroundColor: theme.bg.card, borderColor: theme.border.default }]}
+              onPress={isPremium ? handleManageSharing : undefined}
+              disabled={!isPremium}
+              activeOpacity={0.8}
+              accessibilityLabel={isPremium ? 'Manage Plus sharing' : undefined}
+              accessibilityRole={isPremium ? 'button' : 'none'}
+            >
+              {isPremium ? (
+                <>
+                  <View style={[styles.iconWrap, { backgroundColor: `${theme.primary}18` }]}>
+                    <Ionicons name="gift-outline" size={18} color={theme.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    {outgoingShare ? (
+                      <>
+                        <Text style={[styles.rowLabel, { color: theme.text.primary }]}>
+                          Sharing with {outgoingShare.granteeName}
+                        </Text>
+                        <Text style={[styles.sharingSubLabel, { color: theme.text.secondary }]}>
+                          {outgoingShare.granteeEmail}
+                        </Text>
+                      </>
+                    ) : (
+                      <Text style={[styles.rowLabel, { color: theme.text.primary }]}>
+                        Share Plus with a partner
+                      </Text>
+                    )}
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={theme.text.tertiary} />
+                </>
+              ) : (
+                /* isSharedWithMe — grantee view */
+                <>
+                  <View style={[styles.iconWrap, { backgroundColor: `${theme.success}18` }]}>
+                    <Ionicons name="heart" size={18} color={theme.success} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.rowLabel, { color: theme.text.primary }]}>
+                      Plus shared by {incomingShare?.grantorName ?? 'a partner'}
+                    </Text>
+                    <Text style={[styles.sharingSubLabel, { color: theme.text.secondary }]}>
+                      You have full access to premium features
+                    </Text>
+                  </View>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Settings sections */}
         {sections.map((section) => (
           <View key={section.title} style={styles.section}>
@@ -337,6 +446,91 @@ export default function ProfileScreen(): JSX.Element {
           </View>
         ))}
       </ScrollView>
+
+      {/* Share-with partner picker modal */}
+      {showSharePicker && (
+        <Modal
+          visible={showSharePicker}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setShowSharePicker(false)}
+        >
+          <View style={styles.pickerOverlay}>
+            <View style={[styles.pickerSheet, { backgroundColor: theme.bg.card }]}>
+              <Text style={[styles.pickerTitle, { color: theme.text.primary }]}>
+                Share Plus with a partner
+              </Text>
+              <Text style={[styles.pickerSub, { color: theme.text.secondary }]}>
+                Your connected partner will also unlock all U&Me Plus features.
+              </Text>
+
+              {connections.length === 0 ? (
+                <View style={styles.emptyConnections}>
+                  <Ionicons name="people-outline" size={36} color={theme.text.tertiary} />
+                  <Text style={[styles.emptyConnText, { color: theme.text.secondary }]}>
+                    No connections yet. Add a partner from the Connections tab first.
+                  </Text>
+                </View>
+              ) : (
+                <View style={[styles.pickerList, { borderColor: theme.border.default }]}>
+                  {connections.map((conn, i) => {
+                    const selected = selectedConnection?.id === conn.id;
+                    return (
+                      <React.Fragment key={conn.id}>
+                        {i > 0 && <View style={[styles.pickerDivider, { backgroundColor: theme.border.subtle }]} />}
+                        <TouchableOpacity
+                          style={[
+                            styles.pickerRow,
+                            selected && { backgroundColor: `${theme.primary}12` },
+                          ]}
+                          onPress={() => setSelectedConnection(selected ? null : conn)}
+                          activeOpacity={0.7}
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected }}
+                        >
+                          <View style={[styles.connAvatar, { backgroundColor: conn.color }]}>
+                            <Text style={styles.connAvatarText}>{conn.name.charAt(0).toUpperCase()}</Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.connName, { color: theme.text.primary }]}>{conn.name}</Text>
+                            <Text style={[styles.connEmail, { color: theme.text.secondary }]}>{conn.email}</Text>
+                          </View>
+                          {selected && <Ionicons name="checkmark-circle" size={22} color={theme.primary} />}
+                        </TouchableOpacity>
+                      </React.Fragment>
+                    );
+                  })}
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={[styles.shareBtn, { opacity: selectedConnection ? 1 : 0.4 }]}
+                onPress={handleConfirmShare}
+                disabled={!selectedConnection}
+                activeOpacity={0.85}
+              >
+                <LinearGradient
+                  colors={theme.gradient.primary}
+                  style={styles.shareBtnGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <Text style={styles.shareBtnText}>
+                    {selectedConnection ? `Share with ${selectedConnection.name}` : 'Select a partner'}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setShowSharePicker(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
+              >
+                <Text style={[styles.skipText, { color: theme.text.tertiary }]}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 }
@@ -402,4 +596,60 @@ const styles = StyleSheet.create({
   rowLabel: { ...TYPOGRAPHY.body, flex: 1 },
   rowValue: { ...TYPOGRAPHY.body },
   divider: { height: 1, marginLeft: 62 },
+  // Sharing card
+  sharingSection: { paddingHorizontal: SPACING.screen, marginTop: SPACING.xl },
+  sharingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    gap: SPACING.md,
+  },
+  sharingSubLabel: { ...TYPOGRAPHY.caption, marginTop: 2 },
+  // Share picker modal
+  pickerOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  pickerSheet: {
+    borderTopLeftRadius: RADIUS.xxl,
+    borderTopRightRadius: RADIUS.xxl,
+    paddingHorizontal: SPACING.screen,
+    paddingTop: SPACING.xl,
+    paddingBottom: SPACING.xxxl,
+    gap: SPACING.md,
+  },
+  pickerTitle: { ...TYPOGRAPHY.subheading, textAlign: 'center' },
+  pickerSub: { ...TYPOGRAPHY.body, textAlign: 'center', lineHeight: 20 },
+  emptyConnections: { alignItems: 'center', gap: SPACING.sm, paddingVertical: SPACING.xl },
+  emptyConnText: { ...TYPOGRAPHY.body, textAlign: 'center' },
+  pickerList: { borderRadius: RADIUS.xl, borderWidth: 1, overflow: 'hidden' },
+  pickerDivider: { height: 1, marginLeft: SPACING.md + 40 + SPACING.md },
+  pickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    gap: SPACING.md,
+  },
+  connAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  connAvatarText: { ...TYPOGRAPHY.bodyBold, color: PALETTE.white },
+  connName: { ...TYPOGRAPHY.bodyBold },
+  connEmail: { ...TYPOGRAPHY.caption, marginTop: 1 },
+  shareBtn: { borderRadius: RADIUS.full, overflow: 'hidden', ...SHADOW.md, marginTop: SPACING.sm },
+  shareBtnGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.lg,
+  },
+  shareBtnText: { ...TYPOGRAPHY.subheading, color: PALETTE.white },
+  skipText: { ...TYPOGRAPHY.caption, textAlign: 'center' },
 });
