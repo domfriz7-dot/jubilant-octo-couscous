@@ -20,6 +20,9 @@ import CalendarService from '../../services/CalendarService';
 import { getUserId } from '../../services/IdentityService';
 import { getActiveConnections } from '../../services/ConnectionsService';
 import { useAwardXP } from '../../app/context/XPContext';
+import { reportError } from '../../utils/reportError';
+
+const FIREBASE_ENABLED = Boolean(process.env.EXPO_PUBLIC_FIREBASE_API_KEY);
 
 type RouteType = RouteProp<RootStackParamList, 'AddEvent'>;
 
@@ -51,23 +54,45 @@ export default function AddEventScreen(): JSX.Element {
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
   const [color, setColor] = useState(EVENT_COLORS[0]);
-  const [sharedWith, setSharedWith] = useState<string[]>([]);
+  // New events default to sharing with all active connections so calendars stay
+  // in sync automatically. Users can deselect individuals before saving.
+  const [sharedWith, setSharedWith] = useState<string[]>(
+    isEditing ? [] : getActiveConnections().map((c) => c.id)
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   // Pre-fill form when editing an existing event
   useEffect(() => {
     if (!params?.eventId) return;
+
+    // 1. Populate form from local state immediately (fast path)
     const existing = CalendarService.getEvents().find((e) => e.id === params.eventId);
-    if (!existing) return;
-    setTitle(existing.title);
-    setDate(existing.date);
-    setTime(existing.time);
-    setEndTime(existing.endTime ?? '');
-    setDescription(existing.description ?? '');
-    setLocation(existing.location ?? '');
-    setColor(existing.color);
-    setSharedWith(existing.sharedWith);
+    if (existing) {
+      setTitle(existing.title);
+      setDate(existing.date);
+      setTime(existing.time);
+      setEndTime(existing.endTime ?? '');
+      setDescription(existing.description ?? '');
+      setLocation(existing.location ?? '');
+      setColor(existing.color);
+      setSharedWith(existing.sharedWith);
+    }
+
+    // 2. Fetch sharedWith from Firestore so retroactively-added connection UIDs
+    //    (written by onConnectionCreated) are not accidentally overwritten on save.
+    if (!FIREBASE_ENABLED) return;
+    (async () => {
+      try {
+        const { getFirestore, doc, getDoc } = await import('firebase/firestore');
+        const snap = await getDoc(doc(getFirestore(), 'events', params.eventId!));
+        if (snap.exists()) {
+          setSharedWith(snap.data()?.sharedWith ?? []);
+        }
+      } catch (e) {
+        reportError('AddEventScreen.fetchSharedWith', e);
+      }
+    })();
   }, [params?.eventId]);
 
   const toggleShare = (id: string) =>

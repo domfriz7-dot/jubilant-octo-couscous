@@ -15,6 +15,8 @@ import { RootStackParamList } from '../../navigation/RootNavigator';
 import { useAppTheme } from '../../ui/theme/ThemeProvider';
 import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../../ui/theme/tokens';
 import CalendarService, { CalendarEvent } from '../../services/CalendarService';
+import { getConnectionByUid } from '../../services/ConnectionsService';
+import { getUserId } from '../../services/IdentityService';
 
 type Nav = StackNavigationProp<RootStackParamList>;
 
@@ -107,50 +109,60 @@ export default function HomeScreen(): JSX.Element {
             </Text>
           </View>
         }
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[styles.eventCard, { backgroundColor: theme.bg.card, borderColor: theme.border.default }, SHADOW.sm]}
-            onPress={() => openEvent(item.id)}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.colorBar, { backgroundColor: item.color }]} />
-            <View style={styles.eventInfo}>
-              <Text style={[styles.eventTitle, { color: theme.text.primary }]} numberOfLines={1}>
-                {item.title}
-              </Text>
-              <Text style={[styles.eventMeta, { color: theme.text.secondary }]}>
-                {item.time}{item.endTime ? ` – ${item.endTime}` : ''}
-                {item.location ? `  ·  ${item.location}` : ''}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={theme.text.tertiary} />
-          </TouchableOpacity>
-        )}
+        renderItem={({ item }) => {
+          const isShared = item.createdBy !== getUserId();
+          const fromName = isShared ? (getConnectionByUid(item.createdBy)?.name ?? null) : null;
+          return (
+            <TouchableOpacity
+              style={[styles.eventCard, { backgroundColor: theme.bg.card, borderColor: theme.border.default }, SHADOW.sm]}
+              onPress={() => openEvent(item.id)}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.colorBar, { backgroundColor: item.color }]} />
+              <View style={styles.eventInfo}>
+                <Text style={[styles.eventTitle, { color: theme.text.primary }]} numberOfLines={1}>
+                  {item.title}
+                </Text>
+                <Text style={[styles.eventMeta, { color: theme.text.secondary }]}>
+                  {item.time}{item.endTime ? ` – ${item.endTime}` : ''}
+                  {item.location ? `  ·  ${item.location}` : ''}
+                  {fromName ? `  ·  from ${fromName}` : ''}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={theme.text.tertiary} />
+            </TouchableOpacity>
+          );
+        }}
         ListFooterComponent={
           upcoming.length > 0 ? (
             <>
               <Text style={[styles.sectionTitle, { color: theme.text.primary, marginTop: SPACING.xl }]}>
                 Coming up
               </Text>
-              {upcoming.map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[styles.eventCard, { backgroundColor: theme.bg.card, borderColor: theme.border.default }, SHADOW.sm]}
-                  onPress={() => openEvent(item.id)}
-                  activeOpacity={0.8}
-                >
-                  <View style={[styles.colorBar, { backgroundColor: item.color }]} />
-                  <View style={styles.eventInfo}>
-                    <Text style={[styles.eventTitle, { color: theme.text.primary }]} numberOfLines={1}>
-                      {item.title}
-                    </Text>
-                    <Text style={[styles.eventMeta, { color: theme.text.secondary }]}>
-                      {item.date}  ·  {item.time}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={theme.text.tertiary} />
-                </TouchableOpacity>
-              ))}
+              {upcoming.map((item) => {
+                const isShared = item.createdBy !== getUserId();
+                const fromName = isShared ? (getConnectionByUid(item.createdBy)?.name ?? null) : null;
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[styles.eventCard, { backgroundColor: theme.bg.card, borderColor: theme.border.default }, SHADOW.sm]}
+                    onPress={() => openEvent(item.id)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.colorBar, { backgroundColor: item.color }]} />
+                    <View style={styles.eventInfo}>
+                      <Text style={[styles.eventTitle, { color: theme.text.primary }]} numberOfLines={1}>
+                        {item.title}
+                      </Text>
+                      <Text style={[styles.eventMeta, { color: theme.text.secondary }]}>
+                        {item.date}  ·  {item.time}
+                        {fromName ? `  ·  from ${fromName}` : ''}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={theme.text.tertiary} />
+                  </TouchableOpacity>
+                );
+              })}
             </>
           ) : null
         }

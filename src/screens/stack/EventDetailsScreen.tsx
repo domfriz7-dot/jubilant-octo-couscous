@@ -17,6 +17,7 @@ import { useAppTheme } from '../../ui/theme/ThemeProvider';
 import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../../ui/theme/tokens';
 import CalendarService, { CalendarEvent } from '../../services/CalendarService';
 import { getConnectionByUid } from '../../services/ConnectionsService';
+import { getUserId } from '../../services/IdentityService';
 
 type RouteType = RouteProp<RootStackParamList, 'EventDetails'>;
 
@@ -41,6 +42,13 @@ export default function EventDetailsScreen(): JSX.Element {
     });
     return unsub;
   }, [params.eventId]);
+
+  // Ownership: only the creator can edit or delete
+  const isOwner = event !== null && event.createdBy === getUserId();
+  // Resolve the person who shared this event with us (shown for non-owned events)
+  const sharedByConnection = !isOwner && event !== null
+    ? getConnectionByUid(event.createdBy)
+    : null;
 
   const handleDelete = () => {
     Alert.alert('Delete event?', 'This cannot be undone.', [
@@ -95,15 +103,17 @@ export default function EventDetailsScreen(): JSX.Element {
           >
             <Ionicons name="chevron-down" size={24} color={PALETTE.white} />
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={handleEdit}
-            style={styles.heroBtn}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            accessibilityLabel="Edit event"
-            accessibilityRole="button"
-          >
-            <Ionicons name="pencil" size={20} color={PALETTE.white} />
-          </TouchableOpacity>
+          {isOwner && (
+            <TouchableOpacity
+              onPress={handleEdit}
+              style={styles.heroBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityLabel="Edit event"
+              accessibilityRole="button"
+            >
+              <Ionicons name="pencil" size={20} color={PALETTE.white} />
+            </TouchableOpacity>
+          )}
         </View>
         <View style={styles.heroContent}>
           <Text style={styles.heroTitle}>{event.title}</Text>
@@ -159,15 +169,32 @@ export default function EventDetailsScreen(): JSX.Element {
           </>
         )}
 
-        {/* Delete */}
-        <TouchableOpacity
-          style={[styles.deleteButton, { borderColor: theme.danger }]}
-          onPress={handleDelete}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="trash-outline" size={18} color={theme.danger} />
-          <Text style={[styles.deleteText, { color: theme.danger }]}>Delete event</Text>
-        </TouchableOpacity>
+        {/* Shared by (for received events) */}
+        {sharedByConnection && (
+          <>
+            <Text style={[styles.sectionTitle, { color: theme.text.secondary }]}>Shared by</Text>
+            <View style={[styles.card, { backgroundColor: theme.bg.card, borderColor: theme.border.default }, SHADOW.sm]}>
+              <View style={styles.detailRow}>
+                <View style={[styles.avatar, { backgroundColor: sharedByConnection.color ?? PALETTE.indigo600 }]}>
+                  <Text style={styles.avatarText}>{sharedByConnection.name.charAt(0).toUpperCase()}</Text>
+                </View>
+                <Text style={[styles.detailValue, { color: theme.text.primary }]}>{sharedByConnection.name}</Text>
+              </View>
+            </View>
+          </>
+        )}
+
+        {/* Delete — only the event owner can delete */}
+        {isOwner && (
+          <TouchableOpacity
+            style={[styles.deleteButton, { borderColor: theme.danger }]}
+            onPress={handleDelete}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="trash-outline" size={18} color={theme.danger} />
+            <Text style={[styles.deleteText, { color: theme.danger }]}>Delete event</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </View>
   );

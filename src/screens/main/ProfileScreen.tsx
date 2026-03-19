@@ -110,6 +110,25 @@ export default function ProfileScreen(): JSX.Element {
     );
   };
 
+  const handleSignOut = () => {
+    Alert.alert('Sign out?', 'You will need to sign in again to sync your calendar.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign out',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const { getAuth, signOut } = await import('firebase/auth');
+            await signOut(getAuth());
+          } catch (e) {
+            reportError('ProfileScreen.signOut', e);
+            Alert.alert('Error', 'Could not sign out. Please try again.');
+          }
+        },
+      },
+    ]);
+  };
+
   const openURL = (url: string) => {
     Linking.openURL(url).catch(() =>
       Alert.alert('Could not open link', 'Please visit the URL in your browser.')
@@ -154,6 +173,14 @@ export default function ProfileScreen(): JSX.Element {
           onPress: handleClearData,
           destructive: true,
         },
+        ...(FIREBASE_ENABLED && uid
+          ? [{
+              icon: 'log-out-outline' as IconName,
+              label: 'Sign out',
+              onPress: handleSignOut,
+              destructive: true,
+            }]
+          : []),
       ],
     },
   ];

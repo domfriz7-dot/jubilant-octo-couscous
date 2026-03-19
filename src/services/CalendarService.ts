@@ -89,8 +89,10 @@ const CalendarService = {
     _events = [..._events, newEvent];
     await persist();
 
-    // Write to Firestore so connected users receive the event via onEventShared trigger
-    if (newEvent.sharedWith.length > 0 && isFirebaseConfigured()) {
+    // Always write to Firestore when Firebase is configured so that:
+    // (a) the onEventShared Cloud Function can notify shared users, and
+    // (b) onConnectionCreated can retroactively add new connections to sharedWith.
+    if (isFirebaseConfigured()) {
       try {
         const { getFirestore, doc, setDoc } = await import('firebase/firestore');
         const db = getFirestore();
@@ -113,15 +115,17 @@ const CalendarService = {
     );
     await persist();
 
-    // Keep Firestore in sync for shared events
+    // Always sync to Firestore so recipients stay up-to-date in real time
     const updated = _events.find((e) => e.id === id);
-    if (updated && updated.sharedWith.length > 0 && isFirebaseConfigured()) {
+    if (updated && isFirebaseConfigured()) {
       try {
-        const { getFirestore, doc, updateDoc } = await import('firebase/firestore');
-        await updateDoc(doc(getFirestore(), 'events', id), {
-          ...patch,
-          updatedAt: updated.updatedAt,
-        });
+        const { getFirestore, doc, setDoc } = await import('firebase/firestore');
+        // Use setDoc with merge so the document is created if it didn't exist yet
+        // (e.g. an event created before Firebase was configured).
+        await setDoc(doc(getFirestore(), 'events', id), {
+          ...updated,
+          ownerId: updated.createdBy,
+        }, { merge: false });
       } catch (e) {
         reportError('CalendarService.updateEvent.firestore', e);
       }
@@ -136,8 +140,8 @@ const CalendarService = {
     _sharedEvents = _sharedEvents.filter((e) => e.id !== id);
     await persist();
 
-    // Remove from Firestore if it was a shared event
-    if (target && target.sharedWith.length > 0 && isFirebaseConfigured()) {
+    // Always delete from Firestore so connected users stop seeing the event
+    if (target && isFirebaseConfigured()) {
       try {
         const { getFirestore, doc, deleteDoc } = await import('firebase/firestore');
         await deleteDoc(doc(getFirestore(), 'events', id));

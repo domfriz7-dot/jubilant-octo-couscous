@@ -3,7 +3,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { initializeApp } = require('firebase-admin/app');
 const { getAuth: getAdminAuth } = require('firebase-admin/auth');
 const { getMessaging } = require('firebase-admin/messaging');
-const { getFirestore } = require('firebase-admin/firestore');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const functionsV1 = require('firebase-functions');
 
 initializeApp();
@@ -103,7 +103,49 @@ exports.onInvitationUpdated = onDocumentUpdated('invitations/{inviteId}', async 
   }
 });
 
-// ─── Trigger: connection created → notify sender ──────────────────────────────
+// ─── Helper: retroactively cross-share events between two newly connected users ─
+
+/**
+ * Adds uid2 to sharedWith on every event owned by uid1, and vice-versa.
+ * Uses arrayUnion so the operation is idempotent (safe to re-run).
+ * Batched in groups of 499 to stay under Firestore's 500-op batch limit.
+ */
+async function crossShareExistingEvents(uid1, uid2) {
+  const db = getFirestore();
+
+  async function addToSharedWith(ownerUid, recipientUid) {
+    let snap;
+    try {
+      snap = await db.collection('events').where('ownerId', '==', ownerUid).get();
+    } catch (err) {
+      console.error(`crossShareExistingEvents: query failed for owner ${ownerUid}:`, err);
+      return;
+    }
+    if (snap.empty) return;
+
+    // Split into chunks of 499 to stay within Firestore batch limits
+    for (let i = 0; i < snap.docs.length; i += 499) {
+      const chunk = snap.docs.slice(i, i + 499);
+      const batch = db.batch();
+      chunk.forEach((doc) => {
+        batch.update(doc.ref, { sharedWith: FieldValue.arrayUnion(recipientUid) });
+      });
+      try {
+        await batch.commit();
+      } catch (err) {
+        console.error(`crossShareExistingEvents: batch commit failed:`, err);
+      }
+    }
+  }
+
+  // Run both directions concurrently
+  await Promise.all([
+    addToSharedWith(uid1, uid2),
+    addToSharedWith(uid2, uid1),
+  ]);
+}
+
+// ─── Trigger: connection created → notify parties + cross-share calendars ──────
 
 exports.onConnectionCreated = onDocumentCreated('connections/{connectionId}', async (event) => {
   const data = event.data?.data();
@@ -111,25 +153,34 @@ exports.onConnectionCreated = onDocumentCreated('connections/{connectionId}', as
 
   const { fromUid, toUid, fromName, toName } = data;
 
-  // Notify the inviter that their invite was accepted
+  // Send notifications to both parties
+  const notifyPromises = [];
   if (fromUid) {
-    await notifyUser(
+    notifyPromises.push(notifyUser(
       fromUid,
       'Invitation accepted!',
       `${toName || 'Someone'} accepted your calendar invite`,
       { kind: 'invite_accepted', connectionId: event.params.connectionId }
-    );
+    ));
   }
-
-  // Notify the acceptor that the connection is now live
   if (toUid) {
-    await notifyUser(
+    notifyPromises.push(notifyUser(
       toUid,
       "You're now connected!",
       `You are now sharing calendars with ${fromName || 'someone'}`,
       { kind: 'invite_accepted', connectionId: event.params.connectionId }
-    );
+    ));
   }
+
+  // Retroactively add each user's UID to all of the other's existing events so
+  // both parties' subscription queries immediately surface historical events.
+  const sharePromise = (fromUid && toUid)
+    ? crossShareExistingEvents(fromUid, toUid).catch((err) =>
+        console.error('crossShareExistingEvents failed:', err)
+      )
+    : Promise.resolve();
+
+  await Promise.all([...notifyPromises, sharePromise]);
 });
 
 // ─── Trigger: event shared → notify recipients ────────────────────────────────
