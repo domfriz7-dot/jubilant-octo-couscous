@@ -6,7 +6,7 @@ import { initSentry } from './src/config/sentry';
 initSentry();
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { View, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -15,7 +15,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import XPNotification from './src/components/XPNotification';
 import LevelUpModal from './src/components/LevelUpModal';
 import OnboardingScreen from './src/screens/auth/OnboardingScreen';
-import RootNavigator from './src/navigation/RootNavigator';
+import RootNavigator, { RootStackParamList } from './src/navigation/RootNavigator';
 import AuthNavigator from './src/navigation/AuthNavigator';
 import { ThemeProvider, useAppTheme } from './src/ui/theme/ThemeProvider';
 import ErrorBoundary from './src/components/ErrorBoundary';
@@ -75,11 +75,10 @@ function IdentityGate({ children }: { children?: React.ReactNode }): JSX.Element
           withTimeout(initIdentityResult(), 8000),
         ]);
         if (!integrity.ok) {
-          console.warn('[BOOT] Data integrity issues:', integrity.issues);
+          reportError('IdentityGate.integrity', integrity.issues);
         }
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        console.warn('[BOOT] Identity init issue:', msg);
+        reportError('IdentityGate.boot', e);
       } finally {
         if (!alive) return;
         setReady(true);
@@ -96,7 +95,7 @@ function IdentityGate({ children }: { children?: React.ReactNode }): JSX.Element
 
 function AppShell(): JSX.Element {
   const { isDark, theme } = useAppTheme();
-  const navigationRef = useRef<any>(null);
+  const navigationRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
   const routeNameRef = useRef<string | null>(null);
   const pendingNotificationRef = useRef<NotificationPayload | null>(null);
   // Use a ref (not state) so handleNotificationNav always reads the current
