@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { PALETTE, SPACING, TYPOGRAPHY, RADIUS } from '../ui/theme/tokens';
+import { reportError } from '../utils/reportError';
 
 interface State {
   hasError: boolean;
@@ -19,6 +20,7 @@ export default class ErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: unknown, info: React.ErrorInfo) {
+    reportError('ErrorBoundary', error instanceof Error ? error : new Error(String(error)));
     console.error('[ErrorBoundary]', error, info.componentStack);
   }
 

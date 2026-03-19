@@ -215,7 +215,8 @@ export async function acceptInvitation(
     await runTransaction(db, async (tx) => {
       const invSnap = await tx.get(invRef);
       if (!invSnap.exists()) throw new Error('Invitation not found.');
-      if (invSnap.data()?.status !== 'pending') throw new Error('This invitation is no longer pending.');
+      const invData = invSnap.data() as FirestoreInvitation;
+      if (invData.status !== 'pending') throw new Error('This invitation is no longer pending.');
 
       tx.update(invRef, {
         status: 'accepted',
@@ -223,12 +224,14 @@ export async function acceptInvitation(
         updatedAt: now(),
       });
 
+      // Use the transaction-read snapshot, not the stale parameter, to ensure
+      // we create the connection with the authoritative server values.
       tx.set(connRef, {
-        fromUid: invitation.fromUid,
+        fromUid: invData.fromUid,
         toUid: acceptorUid,
-        fromEmail: invitation.fromEmail,
-        toEmail: invitation.toEmail,
-        fromName: invitation.fromName,
+        fromEmail: invData.fromEmail,
+        toEmail: invData.toEmail,
+        fromName: invData.fromName,
         toName: acceptorName,
         status: 'active',
         createdAt: now(),

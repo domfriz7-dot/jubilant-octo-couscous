@@ -17,6 +17,7 @@ import { AuthStackParamList } from '../../navigation/AuthNavigator';
 import { useAppTheme } from '../../ui/theme/ThemeProvider';
 import { SPACING, TYPOGRAPHY, RADIUS, SHADOW, PALETTE } from '../../ui/theme/tokens';
 import { reportError } from '../../utils/reportError';
+import { ensureUserProfile } from '../../services/InvitationService';
 
 type Nav = StackNavigationProp<AuthStackParamList, 'Register'>;
 
@@ -46,7 +47,16 @@ export default function RegisterScreen(): JSX.Element {
       const { getAuth, createUserWithEmailAndPassword, updateProfile } = await import('firebase/auth');
       const auth = getAuth();
       const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
-      await updateProfile(cred.user, { displayName: name.trim() });
+      // updateProfile does NOT trigger onAuthStateChanged, so ensureUserProfile
+      // in useBootstrapAuth will have run with null displayName by this point.
+      // Update the Firebase user first, then re-sync the Firestore profile.
+      try {
+        await updateProfile(cred.user, { displayName: name.trim() });
+        ensureUserProfile(cred.user.uid, cred.user.email, name.trim(), null).catch(() => {});
+      } catch (profileErr) {
+        reportError('RegisterScreen.updateProfile', profileErr);
+        // Non-fatal: the user is registered; displayName can be set later.
+      }
     } catch (e: any) {
       setError(e?.message ?? 'Registration failed. Please try again.');
       reportError('RegisterScreen', e);
