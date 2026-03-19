@@ -6,7 +6,7 @@ import { initSentry } from './src/config/sentry';
 initSentry();
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { View, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -14,12 +14,16 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import XPNotification from './src/components/XPNotification';
 import LevelUpModal from './src/components/LevelUpModal';
-import OnboardingScreen from './src/screens/OnboardingScreen';
-import RootNavigator from './src/navigation/RootNavigator';
+import OnboardingScreen from './src/screens/auth/OnboardingScreen';
+import RootNavigator, { RootStackParamList } from './src/navigation/RootNavigator';
 import AuthNavigator from './src/navigation/AuthNavigator';
 import { ThemeProvider, useAppTheme } from './src/ui/theme/ThemeProvider';
-import ErrorBoundary from './src/ui/theme/ErrorBoundary';
+import ErrorBoundary from './src/components/ErrorBoundary';
 
+import { XPProvider } from './src/app/context/XPContext';
+import { ConnectionsProvider } from './src/app/context/ConnectionsContext';
+import { SubscriptionProvider } from './src/app/context/SubscriptionContext';
+import { PremiumShareProvider } from './src/app/context/PremiumShareContext';
 import useBootstrapTelemetry from './src/app/bootstrap/useBootstrapTelemetry';
 import useOnboardingGate from './src/app/bootstrap/useOnboardingGate';
 import useBootstrapXP from './src/app/bootstrap/useBootstrapXP';
@@ -28,9 +32,8 @@ import useBootstrapAutopilot from './src/app/bootstrap/useBootstrapAutopilot';
 import useBootstrapCalendarSync from './src/app/bootstrap/useBootstrapCalendarSync';
 import useBootstrapBackend from './src/app/bootstrap/useBootstrapBackend';
 import { useNetworkStatus } from './src/hooks/useNetworkStatus';
-import OfflineBanner from './src/ui/components/OfflineBanner';
+import OfflineBanner from './src/components/OfflineBanner';
 import useBootstrapRuntimeSafety from './src/app/bootstrap/useBootstrapRuntimeSafety';
-import useBootstrapSubscriptions from './src/app/bootstrap/useBootstrapSubscriptions';
 import useBootstrapAuth from './src/app/bootstrap/useBootstrapAuth';
 import PlacesKeyService from './src/services/PlacesKeyService';
 import NotificationService from './src/services/NotificationService';
@@ -73,11 +76,10 @@ function IdentityGate({ children }: { children?: React.ReactNode }): JSX.Element
           withTimeout(initIdentityResult(), 8000),
         ]);
         if (!integrity.ok) {
-          console.warn('[BOOT] Data integrity issues:', integrity.issues);
+          reportError('IdentityGate.integrity', integrity.issues);
         }
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        console.warn('[BOOT] Identity init issue:', msg);
+        reportError('IdentityGate.boot', e);
       } finally {
         if (!alive) return;
         setReady(true);
@@ -94,16 +96,19 @@ function IdentityGate({ children }: { children?: React.ReactNode }): JSX.Element
 
 function AppShell(): JSX.Element {
   const { isDark, theme } = useAppTheme();
-  const navigationRef = useRef<any>(null);
+  const navigationRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
   const routeNameRef = useRef<string | null>(null);
   const pendingNotificationRef = useRef<NotificationPayload | null>(null);
-  const [navReady, setNavReady] = useState(false);
+  // Use a ref (not state) so handleNotificationNav always reads the current
+  // value without needing to be recreated — avoids a stale-closure bug where
+  // navReady was still false inside the callback when onReady fired.
+  const navReadyRef = useRef(false);
 
   const handleNotificationNav = useCallback((data: NotificationPayload) => {
     const nav = navigationRef?.current;
     if (!data?.kind) return;
     // If nav isn't ready yet, queue the latest payload.
-    if (!navReady || !nav?.navigate) {
+    if (!navReadyRef.current || !nav?.navigate) {
       pendingNotificationRef.current = data;
       return;
     }
@@ -115,7 +120,9 @@ function AppShell(): JSX.Element {
         case 'task_reminder':
           nav.navigate('MainTabs', { screen: 'Tasks' });
           break;
+        case 'invite_received':
         case 'invite_accepted':
+        case 'invite_declined':
           nav.navigate('MainTabs', { screen: 'Connections' });
           break;
         case 'nudge':
@@ -133,15 +140,15 @@ function AppShell(): JSX.Element {
         default:
           break;
       }
-    } catch (e) { reportError('App', e as any); pendingNotificationRef.current = data;
+    } catch (e) {
+      reportError('App', e as any);
+      pendingNotificationRef.current = data;
     }
-  }, [navReady]);
+  }, []);
 
   // Bootstrap side-effects (kept out of AppShell body logic)
   useBootstrapTelemetry();
   const { enabled: authEnabled, ready: authReady, user } = useBootstrapAuth();
-  
-  useBootstrapSubscriptions();
   useBootstrapRuntimeSafety();
   useBootstrapDeepLinks(navigationRef);
   useBootstrapAutopilot();
@@ -154,8 +161,8 @@ function AppShell(): JSX.Element {
     PlacesKeyService.init();
   }, []);
 
-
-  // Register for push notifications & set up tap-to-navigate routing
+  // Register for push notifications & set up tap-to-navigate routing.
+  // Registration is best-effort — errors are caught inside NotificationService.
   useEffect(() => {
     NotificationService.registerForPushNotifications();
     NotificationService.setupResponseListener((data: NotificationPayload) => {
@@ -165,7 +172,7 @@ function AppShell(): JSX.Element {
   }, [handleNotificationNav]);
 
   const { isOnboardingComplete, markComplete } = useOnboardingGate();
-  const { xpToast, levelUp, hideXPToast, closeLevelUp } = useBootstrapXP();
+  const { xpToast, levelUp, awardXP, hideXPToast, closeLevelUp } = useBootstrapXP();
 
   if (isOnboardingComplete === null) {
     return <View style={{ flex: 1, backgroundColor: theme.bg.default }} />;
@@ -187,10 +194,13 @@ function AppShell(): JSX.Element {
       <SafeAreaProvider>
         <StatusBar style={isDark ? 'light' : 'dark'} />
         <View style={[styles.container, { backgroundColor: theme.bg.default }]}>
+          <XPProvider value={awardXP}>
+          <ConnectionsProvider>
+          <PremiumShareProvider>
           <NavigationContainer
             ref={navigationRef}
             onReady={() => {
-              setNavReady(true);
+              navReadyRef.current = true;
               const pending = pendingNotificationRef.current;
               pendingNotificationRef.current = null;
               if (pending) handleNotificationNav(pending);
@@ -203,11 +213,16 @@ function AppShell(): JSX.Element {
                   routeNameRef.current = current;
                   trackScreen(current);
                 }
-              } catch (e) { reportError('App', e as any); }
+              } catch (e) {
+                reportError('App', e as any);
+              }
             }}
           >
             {authEnabled && !user ? <AuthNavigator /> : <RootNavigator />}
           </NavigationContainer>
+          </PremiumShareProvider>
+          </ConnectionsProvider>
+          </XPProvider>
 
           <XPNotification visible={xpToast.visible} xp={xpToast.xp} reason={xpToast.reason} onHide={hideXPToast} />
           <LevelUpModal visible={levelUp.visible} levelData={levelUp.levelData} onClose={closeLevelUp} />
@@ -222,7 +237,9 @@ export default function App(): JSX.Element {
   return (
     <ErrorBoundary>
       <ThemeProvider>
-        <IdentityGate><AppShell /></IdentityGate>
+        <SubscriptionProvider>
+          <IdentityGate><AppShell /></IdentityGate>
+        </SubscriptionProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );
